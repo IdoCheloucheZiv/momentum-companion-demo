@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Guided Transition Companion — V2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Heebo:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+     GUIDED TRANSITION COMPANION — V2
+     Single file. Nothing to install. Open in a browser.
+
+     V1 is untouched. This is a separate file.
+
+     CONFIG: everything you may need to change is in one place,
+     in the config block immediately below.
+     ============================================================ -->
+
+<script id="config">
+const CONFIG = {
+  // Your Render proxy. Change the path if your proxy uses a different route.
+  API_URL: "https://momentum-proxy.onrender.com/api/chat",
+
+  // Model your proxy forwards to.
+  MODEL: "claude-sonnet-4-6",
+
+  // Cost control. How many past messages get sent with each request.
+  // Lower = cheaper, less memory of earlier turns. 12 is a good balance.
+  HISTORY_TURNS: 12,
+
+  // Max tokens per reply. Replies are a short explanation plus one question,
+  // and Hebrew uses more tokens per word, so this leaves room for both.
+  MAX_TOKENS: 900,
+
+  // If the proxy cannot be reached, the app falls back to Practice Mode
+  // (a built-in scripted engine) so the whole flow stays testable.
+  ALLOW_PRACTICE_FALLBACK: true,
+
+  // Human support numbers shown in the "Talk to a person" panel.
+  SUPPORT: [
+    { name: "ERAN — emotional first aid, 24/7", he: "ער\"ן — עזרה ראשונה נפשית, 24/7", tel: "1201" },
+    { name: "NATAL — trauma & resilience, IDF-related", he: "נט\"ל — טראומה וחוסן", tel: "1-800-363-363" },
+    { name: "Momentum coordinator", he: "רכז/ת מומנטום", tel: "" }
+  ]
+};
+</script>
+
+<style>
+:root{
+  --stone:#E7E2D9;        /* page */
+  --paper:#FBF9F5;        /* surfaces */
+  --paper-2:#F2EEE6;      /* recessed surfaces */
+  --ink:#1B1F1A;          /* primary text */
+  --ink-2:#4A4F46;        /* secondary text */
+  --dust:#8B877C;         /* tertiary text */
+  --olive:#4E6146;        /* growth accent */
+  --olive-soft:#E2E7DC;
+  --clay:#8F5647;         /* weight / cost accent */
+  --clay-soft:#F0E2DC;
+  --line:#D6D0C4;
+  --focus:#2F5D8A;
+  --r:14px;
+  --w:640px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:var(--stone);color:var(--ink);
+  font-family:'Heebo',system-ui,sans-serif;font-size:16px;line-height:1.55;
+  display:flex;flex-direction:column;
+}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- top bar ---------- */
+.bar{
+  flex:0 0 auto;display:flex;align-items:center;gap:6px;
+  padding:10px 14px;background:var(--paper);border-bottom:1px solid var(--line);
+}
+.bar .mark{font-family:'Frank Ruhl Libre',serif;font-weight:500;font-size:16px;letter-spacing:.01em;margin-inline-end:auto}
+.bar .mark span{color:var(--dust);font-family:'Heebo';font-size:12px;font-weight:400;display:block;line-height:1.2}
+.chip{
+  padding:6px 10px;border:1px solid var(--line);border-radius:999px;
+  font-size:13px;color:var(--ink-2);background:var(--paper);transition:.15s;
+}
+.chip:hover{border-color:var(--ink-2)}
+.chip.on{background:var(--olive);color:#fff;border-color:var(--olive)}
+.chip.badge::after{content:attr(data-count);margin-inline-start:6px;background:var(--olive);color:#fff;border-radius:999px;padding:0 6px;font-size:11px}
+.chip.badge[data-count="0"]::after{display:none}
+
+/* ---------- generic screen ---------- */
+.screen{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain}
+.pad{max-width:var(--w);margin:0 auto;padding:22px 18px 40px}
+
+/* ---------- welcome ---------- */
+.hello{font-family:'Frank Ruhl Libre',serif;font-size:29px;line-height:1.28;font-weight:500;margin:10px 0 14px}
+.lede{color:var(--ink-2);margin-bottom:22px}
+.note{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:10px}
+.note h3{font-size:14px;font-weight:500;margin-bottom:5px}
+.note p{font-size:14px;color:var(--ink-2)}
+.note.privacy{background:var(--paper-2)}
+.note.privacy p{font-size:13.5px}
+.choices{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 8px}
+.choice{
+  flex:1 1 140px;padding:14px 12px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--paper);text-align:start;transition:.15s
+}
+.choice small{display:block;color:var(--dust);font-size:12.5px;margin-top:3px}
+.choice.on{border-color:var(--olive);background:var(--olive-soft)}
+.go{
+  display:block;width:100%;margin-top:18px;padding:15px;border-radius:var(--r);
+  background:var(--ink);color:var(--stone);font-size:16px;font-weight:500;transition:.15s
+}
+.go:hover{background:var(--olive)}
+.tiny{font-size:12.5px;color:var(--dust);margin-top:12px;text-align:center}
+
+/* ---------- conversation ---------- */
+#thread{display:flex;flex-direction:column;gap:16px}
+.turn{max-width:100%}
+.turn.them .body{
+  font-family:'Frank Ruhl Libre',serif;font-size:18.5px;line-height:1.6;color:var(--ink);
+  white-space:pre-wrap;
+}
+.turn.them .body p+p{margin-top:.7em}
+.turn.me{align-self:flex-end;max-width:85%}
+.turn.me .body{
+  background:var(--paper);border:1px solid var(--line);border-radius:var(--r) var(--r) 4px var(--r);
+  padding:10px 13px;font-size:15.5px;color:var(--ink-2);white-space:pre-wrap
+}
+html[dir="rtl"] .turn.me .body{border-radius:var(--r) var(--r) var(--r) 4px}
+.turn.sys .body{
+  font-size:13.5px;color:var(--dust);border-inline-start:2px solid var(--line);padding-inline-start:10px
+}
+.thinking{display:flex;gap:5px;padding:6px 0}
+.thinking i{width:6px;height:6px;border-radius:50%;background:var(--dust);animation:b 1.2s infinite}
+.thinking i:nth-child(2){animation-delay:.2s}.thinking i:nth-child(3){animation-delay:.4s}
+@keyframes b{0%,60%,100%{opacity:.25}30%{opacity:1}}
+
+/* surfaced skill card inside the thread */
+.surface{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:13px 15px}
+.surface h4{font-size:12.5px;font-weight:500;color:var(--dust);margin-bottom:8px}
+.surface .row{display:flex;gap:8px;flex-wrap:wrap}
+.tag{padding:6px 11px;border-radius:999px;background:var(--olive-soft);color:var(--olive);font-size:13.5px;border:1px solid transparent}
+.tag.cost{background:var(--clay-soft);color:var(--clay)}
+.props{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.prop{
+  text-align:start;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--paper);transition:.15s
+}
+.prop:hover{border-color:var(--olive)}
+.prop b{display:block;font-weight:500;font-size:15px}
+.prop small{color:var(--dust);font-size:13px}
+
+/* ---------- composer ---------- */
+.composer{
+  flex:0 0 auto;background:var(--paper);border-top:1px solid var(--line);
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+}
+.cwrap{max-width:var(--w);margin:0 auto;display:flex;gap:8px;align-items:flex-end}
+#input{
+  flex:1;resize:none;border:1px solid var(--line);border-radius:var(--r);
+  padding:11px 13px;font-family:inherit;font-size:16px;line-height:1.45;
+  background:var(--paper);color:var(--ink);max-height:140px;min-height:46px
+}
+#input:focus{outline:none;border-color:var(--olive)}
+.icon{
+  width:46px;height:46px;flex:0 0 46px;border-radius:50%;border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;background:var(--paper);transition:.15s
+}
+.icon.send{background:var(--ink);color:var(--stone);border-color:var(--ink)}
+.icon.mic.live{background:var(--clay);color:#fff;border-color:var(--clay);animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(143,86,71,.45)}50%{box-shadow:0 0 0 7px rgba(143,86,71,0)}}
+.hint{max-width:var(--w);margin:6px auto 0;font-size:12px;color:var(--dust);text-align:center;min-height:15px}
+
+/* ---------- drawer (profile / support) ---------- */
+.veil{position:fixed;inset:0;background:rgba(27,31,26,.45);display:none;z-index:40}
+.veil.on{display:block}
+.drawer{
+  position:fixed;inset-inline-end:0;top:0;bottom:0;width:min(420px,92vw);z-index:41;
+  background:var(--stone);border-inline-start:1px solid var(--line);
+  transform:translateX(110%);transition:transform .22s ease;display:flex;flex-direction:column
+}
+html[dir="rtl"] .drawer{transform:translateX(-110%)}
+.drawer.on{transform:none}
+.dhead{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--paper)}
+.dhead h2{font-family:'Frank Ruhl Libre',serif;font-size:18px;font-weight:500;margin-inline-end:auto}
+.dbody{overflow-y:auto;padding:16px;flex:1}
+.block{margin-bottom:22px}
+.block>h3{font-size:13px;font-weight:500;color:var(--dust);margin-bottom:9px}
+.entry{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+.entry b{display:block;font-weight:500;font-size:15.5px}
+.entry q{display:block;color:var(--ink-2);font-size:14px;margin-top:5px;font-style:normal}
+.entry q::before{content:"“"}.entry q::after{content:"”"}
+.entry.cost{border-inline-start:3px solid var(--clay)}
+.entry.strength{border-inline-start:3px solid var(--olive)}
+.empty{color:var(--dust);font-size:14px;background:var(--paper-2);border-radius:var(--r);padding:14px}
+.sup{display:block;background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:13px 15px;margin-bottom:8px;text-decoration:none;color:inherit}
+.sup b{display:block;font-weight:500}
+.sup span{color:var(--olive);font-size:15px}
+.danger{color:var(--clay);font-size:13.5px;background:var(--clay-soft);border-radius:var(--r);padding:12px 14px;margin-bottom:14px}
+.linkish{color:var(--ink-2);font-size:13.5px;text-decoration:underline;background:none;padding:4px 0}
+@media (max-width:420px){ .hello{font-size:25px} .turn.them .body{font-size:17.5px} }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="mark" id="mark">Transition Companion<span id="markSub">a conversation, not a form</span></div>
+  <button class="chip" id="btnLang" title="Language">עברית</button>
+  <button class="chip" id="btnVoice" title="Read replies aloud">🔊</button>
+  <button class="chip badge" id="btnProfile" data-count="0">Profile</button>
+  <button class="chip" id="btnHelp">Support</button>
+</header>
+
+<!-- ============ WELCOME ============ -->
+<main class="screen" id="welcome">
+  <div class="pad">
+    <h1 class="hello" id="wTitle"></h1>
+    <p class="lede" id="wLede"></p>
+
+    <div class="note"><h3 id="w1t"></h3><p id="w1p"></p></div>
+    <div class="note"><h3 id="w2t"></h3><p id="w2p"></p></div>
+    <div class="note privacy"><h3 id="w3t"></h3><p id="w3p"></p></div>
+
+    <h3 style="font-size:14px;font-weight:500;margin-top:20px" id="wModeQ"></h3>
+    <div class="choices" id="modes">
+      <button class="choice on" data-mode="type"><b id="m1"></b><small id="m1s"></small></button>
+      <button class="choice" data-mode="voice"><b id="m2"></b><small id="m2s"></small></button>
+      <button class="choice" data-mode="both"><b id="m3"></b><small id="m3s"></small></button>
+    </div>
+
+    <button class="go" id="btnStart"></button>
+    <p class="tiny" id="wTiny"></p>
+    <p style="text-align:center"><button class="linkish" id="btnDiag"></button></p>
+    <div class="note" id="diagOut" style="display:none;font-size:13.5px"></div>
+  </div>
+</main>
+
+<!-- ============ CONVERSATION ============ -->
+<main class="screen" id="chat" hidden>
+  <div class="pad"><div id="thread"></div></div>
+</main>
+
+<div class="composer" id="composer" hidden>
+  <div class="cwrap">
+    <button class="icon mic" id="btnMic" title="Speak">🎙</button>
+    <textarea id="input" rows="1" placeholder=""></textarea>
+    <button class="icon send" id="btnSend" title="Send">↑</button>
+  </div>
+  <div class="hint" id="hint"></div>
+</div>
+
+<!-- ============ DRAWER ============ -->
+<div class="veil" id="veil"></div>
+<aside class="drawer" id="drawer">
+  <div class="dhead"><h2 id="dTitle"></h2><button class="chip" id="btnClose">✕</button></div>
+  <div class="dbody" id="dBody"></div>
+</aside>
+
+<script>
+/* ==========================================================================
+   1. LANGUAGE STRINGS
+   ========================================================================== */
+const T = {
+en:{
+  dir:"ltr", other:"עברית", mark:"Transition Companion", markSub:"a conversation, not a form",
+  wTitle:"Before anything else — how are you doing with all this?",
+  wLede:"This is a conversation about leaving service and what comes next. There is no questionnaire and no menu to choose from. We talk, and what you need becomes clear as we go.",
+  w1t:"What this does", w1p:"Asks about your service, what it actually required of you, and what it built. Then helps you think through what is next — with real options, real trade-offs, and follow-through.",
+  w2t:"What this is not", w2p:"Not therapy, and not a replacement for a person. If something heavy comes up, support numbers are one tap away at any point, and we keep talking.",
+  w3t:"Your words", w3p:"The conversation is saved in this browser only. Each message you send is passed to an AI service to write a reply. If you speak, your browser handles the speech — on most browsers that means audio goes to the browser maker's servers. Nothing is stored on our server. Clear your browser data and this is gone. On a shared device, other people using this browser could open it.",
+  wModeQ:"How do you want to talk?",
+  m1:"Type", m1s:"Keyboard only", m2:"Speak", m2s:"Voice in, read aloud", m3:"Both", m3s:"Switch freely",
+  start:"Start talking", tiny:"You can stop, change language, or switch to voice at any point.",
+  ph:"Type your answer…", phVoice:"Tap the mic, or type…",
+  profile:"Profile", support:"Support", dProfile:"Your service growth profile", dSupport:"Talk to a person",
+  micOn:"Listening — tap the mic again to stop.", micOff:"", micNo:"This browser can't do speech recognition. Try Chrome, or type instead.",
+  emptyP:"Nothing here yet. Strengths appear only once you have described something real that shows them — not because of your role.",
+  pStr:"Built in service", pCost:"What it cost", pOpen:"Still open", pDir:"Directions raised",
+  offline:"⚠ PRACTICE MODE — the AI is NOT connected. These replies come from a fixed script and do NOT respond to what you write. This is not how the app really behaves. Tap Check connection on the start screen to fix it.",
+  sendFail:"That message didn't go through. Tap send again to retry.",
+  concern:"This is a lot to carry. These people answer 24/7, and I'm still here after.",
+  callit:"Call",
+  diag:"Check connection to the AI service",
+  diagRun:"Checking…",
+  diagOK:"Connected. The AI service answered correctly — full conversation available.",
+  diag404:"Reached the server, but that route doesn't exist (404). The proxy is running; the path in CONFIG.API_URL is probably wrong.",
+  diag401:"Reached the server, but it refused the request (401/403). Usually a missing or wrong API key on the proxy side.",
+  diag500:"Reached the server, but it errored (500). The proxy is running but something failed inside it — check its logs on Render.",
+  diagCORS:"Couldn't reach it from this page. Either the server is asleep or down, or it isn't allowing requests from this page (CORS). If it's on Render's free tier, wait ~30s and try again.",
+  diagShape:"Connected, but the reply wasn't in the expected shape. The proxy answered with something other than Anthropic's usual content array.",
+  diagNote:"Practice Mode still works regardless — this only affects the live AI conversation."
+},
+he:{
+  dir:"rtl", other:"English", mark:"מלווה המעבר", markSub:"שיחה, לא טופס",
+  wTitle:"לפני הכול — איך אתה מרגיש עם כל זה?",
+  wLede:"זו שיחה על סיום השירות ועל מה שבא אחרי. אין שאלון ואין תפריט לבחור ממנו. מדברים, ומה שצריך מתברר תוך כדי.",
+  w1t:"מה זה עושה", w1p:"שואל על השירות שלך, מה הוא באמת דרש ממך, ומה הוא בנה. ואז עוזר לחשוב מה הלאה — עם אפשרויות אמיתיות, יתרונות וחסרונות, ומעקב.",
+  w2t:"מה זה לא", w2p:"זה לא טיפול, וזה לא מחליף בן אדם. אם עולה משהו כבד, מספרי תמיכה נמצאים בלחיצה אחת בכל רגע, וממשיכים לדבר.",
+  w3t:"המילים שלך", w3p:"השיחה נשמרת רק בדפדפן הזה. כל הודעה שאתה שולח עוברת לשירות AI כדי לכתוב תשובה. אם תדבר, הדפדפן מטפל בזיהוי הדיבור — ברוב הדפדפנים זה אומר שההקלטה עוברת לשרתים של יצרן הדפדפן. אצלנו בשרת לא נשמר כלום. ניקוי נתוני הדפדפן מוחק הכול. במכשיר משותף, מי שישתמש בדפדפן יוכל לפתוח את זה.",
+  wModeQ:"איך נוח לך לדבר?",
+  m1:"הקלדה", m1s:"מקלדת בלבד", m2:"דיבור", m2s:"מדברים ומקשיבים", m3:"שניהם", m3s:"מעבר חופשי",
+  start:"מתחילים לדבר", tiny:"אפשר לעצור, להחליף שפה או לעבור לדיבור בכל רגע.",
+  ph:"כתוב תשובה…", phVoice:"לחץ על המיקרופון, או כתוב…",
+  profile:"פרופיל", support:"תמיכה", dProfile:"פרופיל הצמיחה שלך מהשירות", dSupport:"לדבר עם בן אדם",
+  micOn:"מקשיב — לחץ שוב על המיקרופון כדי לעצור.", micOff:"", micNo:"הדפדפן הזה לא תומך בזיהוי דיבור. נסה כרום, או פשוט תכתוב.",
+  emptyP:"עדיין ריק. חוזקות מופיעות רק אחרי שתיארת משהו אמיתי שמראה אותן — לא בגלל התפקיד.",
+  pStr:"מה נבנה בשירות", pCost:"מה זה עלה", pOpen:"עדיין פתוח", pDir:"כיוונים שעלו",
+  offline:"⚠ מצב תרגול — ה‑AI לא מחובר. התשובות האלה מגיעות מתסריט קבוע ולא מגיבות למה שכתבת. זו לא ההתנהגות האמיתית של האפליקציה. לחץ על בדיקת חיבור במסך הפתיחה כדי לתקן.",
+  sendFail:"ההודעה לא נשלחה. לחץ שוב על שליחה כדי לנסות שוב.",
+  concern:"זה הרבה לשאת. האנשים האלה עונים מסביב לשעון, ואני כאן גם אחרי.",
+  callit:"חיוג",
+  diag:"בדיקת חיבור לשירות ה‑AI",
+  diagRun:"בודק…",
+  diagOK:"מחובר. שירות ה‑AI ענה כמו שצריך — השיחה המלאה זמינה.",
+  diag404:"הגענו לשרת, אבל הנתיב הזה לא קיים (404). הפרוקסי רץ; כנראה שהכתובת ב‑CONFIG.API_URL לא נכונה.",
+  diag401:"הגענו לשרת, אבל הוא סירב לבקשה (401/403). בדרך כלל מפתח API חסר או שגוי בצד הפרוקסי.",
+  diag500:"הגענו לשרת, אבל הוא נפל (500). הפרוקסי רץ אבל משהו נכשל בתוכו — כדאי לבדוק לוגים ב‑Render.",
+  diagCORS:"לא הצלחנו להגיע אליו מהדף הזה. או שהשרת ישן או כבוי, או שהוא לא מאשר בקשות מהדף הזה (CORS). אם זה Render בחינם — חכה כ‑30 שניות ונסה שוב.",
+  diagShape:"מחובר, אבל התשובה לא הגיעה במבנה הצפוי. הפרוקסי החזיר משהו אחר ממה ש‑Anthropic מחזירה בדרך כלל.",
+  diagNote:"מצב תרגול עובד בכל מקרה — זה משפיע רק על השיחה החיה מול ה‑AI."
+}};
+
+/* ==========================================================================
+   2. THE SERVICE SKILLS FRAMEWORK (63 identified skills, 6 domains)
+   Used as a DISCOVERY aid behind the dialogue — never shown as a checklist,
+   never awarded without a concrete example from the person.
+   ========================================================================== */
+const DOMAINS = {
+  m:{en:"Mission & execution", he:"משימה וביצוע"},
+  l:{en:"Leadership & people", he:"מנהיגות ואנשים"},
+  r:{en:"Resilience & mindset", he:"חוסן וראש"},
+  t:{en:"Thinking & problem solving", he:"חשיבה ופתרון בעיות"},
+  c:{en:"Character & values", he:"אופי וערכים"},
+  s:{en:"Social & communication", he:"חברה ותקשורת"}
+};
+const SKILLS = [
+ [1,"m","Finishing the job","לסיים את המשימה"],[2,"m","Working under pressure","עבודה תחת לחץ"],
+ [3,"m","Completing tasks","השלמת משימות"],[4,"m","Planning","תכנון"],
+ [5,"m","Time management","ניהול זמן"],[6,"m","Reacting fast","תגובה מהירה"],
+ [7,"m","Improvising","אלתור"],[8,"m","Running admin and logistics","סדר, מנהלה ולוגיסטיקה"],
+ [9,"m","Learning technology fast","שליטה טכנולוגית"],[10,"m","Functioning in hard conditions","תפקוד בתנאים קשים"],
+ [11,"m","Prioritising","תיעדוף"],[12,"m","Taking calculated risk","לקיחת סיכון מחושב"],
+ [13,"m","Navigating systems","התנהלות מול מערכות"],[14,"m","Leading a process","הובלת תהליך"],
+ [15,"m","Working independently","עבודה עצמאית"],
+ [16,"l","Leadership","מנהיגות"],[17,"l","Teamwork","עבודת צוות"],
+ [18,"l","Leading people","הובלת אנשים"],[19,"l","Teaching and training","הדרכה"],
+ [20,"l","Building close relationships","יצירת קשרים קרובים"],[21,"l","Working with people unlike you","עבודה עם אנשים שונים ממך"],
+ [22,"l","Contributing to others","תרומה לאחרים"],[23,"l","Serving someone else's need","שירותיות"],
+ [24,"l","Organising and managing","ארגון וניהול"],[25,"l","Self-discipline","משמעת עצמית"],
+ [26,"r","Resilience","חוסן"],[27,"r","Emotional regulation","ויסות רגשי"],
+ [28,"r","Dealing with failure","התמודדות עם כישלון"],[29,"r","Acting despite fear","פעולה למרות פחד"],
+ [30,"r","Facing challenges","התמודדות עם אתגרים"],[31,"r","Hakol barosh — mental framing","הכל בראש"],
+ [32,"r","Handling frustration","התמודדות עם תסכול"],[33,"r","Coping with stress","התמודדות עם לחץ"],
+ [34,"r","Carrying loss","התמודדות עם אובדן"],[35,"r","Living with uncertainty","התמודדות עם אי‑ודאות"],
+ [36,"r","Recognising success","זיהוי הצלחה"],[37,"r","Being alone","להיות לבד"],
+ [38,"t","Decision making","קבלת החלטות"],[39,"t","Problem solving","פתרון בעיות"],
+ [40,"t","Thinking outside the box","חשיבה מחוץ לקופסה"],[41,"t","Seizing an opening","ניצול הזדמנות"],
+ [42,"t","Intuition from experience","אינטואיציה מנוסיון"],[43,"t","Adapting to change","הסתגלות לשינוי"],
+ [44,"t","Insisting until it moves","התעקשות"],[45,"t","Everything is possible","הכל אפשרי"],
+ [46,"t","Thinking big","חשיבה בגדול"],[47,"t","Flexibility of method","גמישות בדרך"],
+ [48,"c","Being trusted","אמינות"],[49,"c","Hard work as baseline","עבודה קשה כברירת מחדל"],
+ [50,"c","Doing right unwatched","אתיקה גם כשאף אחד לא רואה"],[51,"c","Taking responsibility","לקיחת אחריות"],
+ [52,"c","Working from belief","תשוקה ואמונה בדרך"],[53,"c","Working for meaning","עבודה מתוך משמעות"],
+ [54,"c","Devotion","מסירות"],[55,"c","Professionalism","מקצועיות"],
+ [56,"c","Determination over time","נחישות לאורך זמן"],[57,"c","Care and giving","אכפתיות ונתינה"],
+ [58,"s","Clear direct communication","תקשורת ישירה וברורה"],[59,"s","Creativity with what you have","יצירתיות עם מה שיש"],
+ [60,"s","Appreciating small things","הערכת הדברים הקטנים"],[61,"s","Holding back judgment","הימנעות משיפוטיות"],
+ [62,"s","Persisting past motivation","התמדה גם בלי מוטיבציה"],[63,"s","Holding a standard","עמידה בסטנדרט"]
+];
+const skillById = id => SKILLS.find(s => s[0] === +id);
+const skillName = (id,lang) => { const s = skillById(id); return s ? (lang==="he"?s[3]:s[2]) : ""; };
+
+/* ==========================================================================
+   3. STATE
+   ========================================================================== */
+const KEY = "gtc_v2_state";
+let S = load() || {
+  lang: "he", mode: "type", started: false,
+  phase: "opening",           // opening → foundation → discovery → direction → open
+  messages: [],               // {role:'user'|'assistant', text, surfaced?, props?}
+  profile: { strengths: [], costs: [], open: [], directions: [] },
+  practice: false, practiceStep: 0, ack: false, shift: false
+};
+function load(){ try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ return null; } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+const L = () => T[S.lang];
+
+/* ==========================================================================
+   4. UI WIRING
+   ========================================================================== */
+const $ = id => document.getElementById(id);
+const el = (tag, cls, txt) => { const n=document.createElement(tag); if(cls)n.className=cls; if(txt!=null)n.textContent=txt; return n; };
+
+function paintStatic(){
+  const t = L();
+  document.documentElement.lang = S.lang;
+  document.documentElement.dir = t.dir;
+  $("mark").firstChild.nodeValue = t.mark;
+  $("markSub").textContent = t.markSub;
+  $("btnLang").textContent = t.other;
+  $("btnProfile").textContent = t.profile;
+  $("btnHelp").textContent = t.support;
+  const map = {wTitle:"wTitle",wLede:"wLede",w1t:"w1t",w1p:"w1p",w2t:"w2t",w2p:"w2p",
+               w3t:"w3t",w3p:"w3p",wModeQ:"wModeQ",m1:"m1",m1s:"m1s",m2:"m2",m2s:"m2s",m3:"m3",m3s:"m3s"};
+  for (const k in map) $(k).textContent = t[map[k]];
+  $("btnStart").textContent = t.start;
+  $("wTiny").textContent = t.tiny;
+  $("btnDiag").textContent = t.diag;
+  $("input").placeholder = (S.mode==="type") ? t.ph : t.phVoice;
+  $("btnProfile").dataset.count = S.profile.strengths.length;
+}
+
+$("btnLang").onclick = () => {
+  S.lang = S.lang === "he" ? "en" : "he";
+  stopSpeaking(); save(); paintStatic(); renderThread(); if($("drawer").classList.contains("on")) closeDrawer();
+};
+
+document.querySelectorAll(".choice").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".choice").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); S.mode = b.dataset.mode;
+  if (S.mode !== "type") { S.speak = true; $("btnVoice").classList.add("on"); }
+  paintStatic(); save();
+});
+
+$("btnVoice").onclick = () => { S.speak = !S.speak; $("btnVoice").classList.toggle("on", !!S.speak); if(!S.speak) stopSpeaking(); save(); };
+
+$("btnStart").onclick = () => { S.started = true; save(); enterChat(); if(!S.messages.length) openConversation(); };
+
+/* Connection diagnostic — tells apart "wrong path", "server asleep", "no key",
+   and "wrong reply shape", which otherwise all look identical (silent fallback). */
+$("btnDiag").onclick = async () => {
+  const t = L(), out = $("diagOut");
+  out.style.display = "block";
+  out.textContent = t.diagRun;
+  let res;
+  try {
+    res = await fetch(CONFIG.API_URL, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ model: CONFIG.MODEL, max_tokens: 16,
+        messages:[{role:"user", content:"Reply with the single word: ok"}] })
+    });
+  } catch (e) {
+    out.textContent = t.diagCORS + "\n\n(" + e.message + ")\n\n" + t.diagNote;
+    return;
+  }
+  if (res.status === 404) { out.textContent = t.diag404 + "\n\n" + CONFIG.API_URL + "\n\n" + t.diagNote; return; }
+  if (res.status === 401 || res.status === 403) { out.textContent = t.diag401 + "\n\n" + t.diagNote; return; }
+  if (res.status >= 500) { out.textContent = t.diag500 + "\n\n" + t.diagNote; return; }
+  if (!res.ok) { out.textContent = "HTTP " + res.status + "\n\n" + t.diagNote; return; }
+  let data;
+  try { data = await res.json(); } catch(e) { out.textContent = t.diagShape + "\n\n" + t.diagNote; return; }
+  const txt = (data && Array.isArray(data.content))
+    ? data.content.filter(b=>b.type==="text").map(b=>b.text).join(" ").trim() : null;
+  out.textContent = txt
+    ? t.diagOK + "\n\n→ " + txt.slice(0,80)
+    : t.diagShape + "\n\n" + JSON.stringify(data).slice(0,200) + "\n\n" + t.diagNote;
+};
+
+$("btnSend").onclick = () => sendUser($("input").value);
+$("input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendUser($("input").value); }
+});
+$("input").addEventListener("input", e => {
+  e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight,140)+"px";
+});
+
+function enterChat(){
+  $("welcome").hidden = true; $("chat").hidden = false; $("composer").hidden = false;
+  renderThread();
+}
+
+/* ==========================================================================
+   5. THREAD RENDERING
+   ========================================================================== */
+function renderThread(){
+  const box = $("thread"); box.innerHTML = "";
+  S.messages.forEach((m,i) => box.appendChild(turnNode(m,i)));
+  scrollDown();
+}
+function turnNode(m, idx){
+  const wrap = el("div","turn "+(m.role==="user"?"me":m.role==="system"?"sys":"them"));
+  const body = el("div","body", m.text);
+  wrap.appendChild(body);
+
+  if (m.surfaced && m.surfaced.length){
+    const s = el("div","surface");
+    s.appendChild(el("h4", null, S.lang==="he" ? "חוזקות ששווה לבדוק — תגיד אם זה מתאים:" : "Possible strengths worth checking — tell me if these fit:"));
+    const row = el("div","row");
+    m.surfaced.forEach(c => row.appendChild(el("span","tag", skillName(c.id,S.lang) || c.label || "")));
+    s.appendChild(row); wrap.appendChild(s);
+  }
+  if (m.props && m.props.length){
+    const p = el("div","props");
+    m.props.forEach(pr => {
+      const b = el("button","prop");
+      b.appendChild(el("b",null,pr.title));
+      if (pr.why) b.appendChild(el("small",null,pr.why));
+      b.onclick = () => sendUser(pr.title);
+      p.appendChild(b);
+    });
+    wrap.appendChild(p);
+  }
+  return wrap;
+}
+function scrollDown(){ const s=$("chat"); s.scrollTop = s.scrollHeight; }
+
+function pushMsg(role, text, extra){
+  const m = Object.assign({role, text}, extra||{});
+  S.messages.push(m); save();
+  $("thread").appendChild(turnNode(m)); scrollDown();
+  if (role === "assistant" && S.speak) speak(text);
+  return m;
+}
+function showThinking(){
+  const n = el("div","turn them"); n.id="thinking";
+  const d = el("div","thinking"); d.innerHTML="<i></i><i></i><i></i>"; n.appendChild(d);
+  $("thread").appendChild(n); scrollDown();
+}
+function hideThinking(){ const n=$("thinking"); if(n) n.remove(); }
+
+/* ==========================================================================
+   6. THE COMPANION'S INSTRUCTIONS
+   This is where the behaviour required by the brief is encoded.
+   Kept compact on purpose — it is sent with every request.
+   ========================================================================== */
+function systemPrompt(){
+  const names = SKILLS.map(s => s[0]+":"+s[2]).join(", ");
+  const p = S.profile;
+  const state =
+    "PHASE: "+S.phase+
+    "\nCONFIRMED STRENGTHS: "+(p.strengths.map(x=>x.id+" ("+x.evidence+")").join("; ")||"none yet")+
+    "\nCOSTS NAMED: "+(p.costs.join("; ")||"none yet")+
+    "\nOPEN QUESTIONS: "+(p.open.join("; ")||"none yet")+
+    "\nDIRECTIONS RAISED: "+(p.directions.map(d=>d.title).join("; ")||"none yet")+
+    "\nSERVICE ACKNOWLEDGED: "+(S.ack?"yes":"no")+
+    "\nSHIFT NAMED: "+(S.shift?"yes":"no");
+
+  return `You are a transition companion for Israelis finishing IDF service (conscripts, officers, reservists). Reply in ${S.lang==="he"?"Hebrew":"English"}. Speak plainly, like a sharp person who has sat with many soldiers — not a coach, not a therapist, not a cheerleader.
+
+HOW YOU TALK
+- Give a real answer, not a quick prompt. Write two short paragraphs, roughly 70 to 120 words in total. First paragraph: 2 to 4 sentences of substance that ADD something the person did not say — why this matters, what is common at this stage, what trade-off or pattern is in play, or the reasoning behind where you are heading. Second paragraph: ONE question that follows from it. Never a list of questions, never bullet points.
+- Never open by restating, summarising or quoting what they just said. Do not use "I hear", "I heard", "what I'm hearing", "it sounds like", "so you're saying", "you mentioned", or their own phrases echoed back. Start with the substance: your read, the explanation, or the answer. They know what they said.
+- Never flatter. Never say "amazing", "incredible", "you're a natural". No praise without evidence.
+- Never assume. Role, unit, or rank is a HYPOTHESIS, never a conclusion. Two people in the same role built different things.
+- Do not offer a menu of services or modules. What is needed emerges from what they say.
+- If they are vague about an event or a fact, ask for one concrete moment: what happened, what did you actually do, what did it cost.
+- If they are vague about a feeling — "I don't know", "what do you think", "it's hard to explain" — you may venture ONE plain-spoken guess at what's underneath, built from what they've actually told you so far, not a generic guess. State it clearly as a guess, not a fact ("maybe it's more X than Y" — never "you feel X"), and ask if that's close. If they correct it, drop your guess immediately and go with theirs — do not defend it or re-argue it.
+
+RESPOND TO WHAT THEY SAID BY BUILDING ON IT, NOT REPEATING IT
+Every reply must engage the specific content of their last message — but by adding to it, never by echoing it. If they said "excited but uncertain", "I just want to be free", or "strange", do not hand those words back. Explain what is usually going on underneath that state, and connect it to the specifics they gave. Never ask a generic next question that would make sense regardless of what they just told you; that is the single worst failure mode of this app.
+When they express uncertainty, restlessness, wanting freedom, numbness, or not knowing what to do, treat that as the subject, not as an obstacle to getting through your questions. Explain plainly what is common for people leaving service — the sudden absence of structure, the gap between relief and emptiness, friends scattering, money pressure, family not understanding — say why it happens, and connect it to what THEY specifically said. Keep it a short, grounded explanation, not a lecture, then one question that follows from it.
+
+PHASES (move when the person is ready, not on a timer)
+1 opening — establish, early and explicitly: where they served, their ACTUAL ROLE and rank (combat, commander, officer, support, technical), how long, and where they are now. Then how it is actually sitting with them and what is on their mind. Get role early — you need it as a hypothesis — but never treat it as the conclusion about what they built.
+2 foundation — the transition foundation conversation: what their service actually required of them; what it took from them; what it required them to become; how it changed what they can do, what they trust themselves with, what responsibility means to them, and how they see the world. Hold both sides: service is sacrifice AND it built things. Do not resolve that tension prematurely.
+3 discovery — surface possible strengths from what they described, then TEST each one by asking for a concrete example. A strength enters the profile only with the person's own evidence.
+4 direction — what they are weighing next: work, study, money, relationships, rest, meaning.
+5 open — ongoing. Keep analysing, keep following up on what was decided.
+
+ACKNOWLEDGE ONCE, GROUNDED IN THEIR OWN WORDS
+If SERVICE ACKNOWLEDGED is "no" and they have just told you something concrete about their service — what unit, how long, how intense — acknowledge in one sincere sentence what carrying that much, for that long, weighs — without listing their details back to them and without a generic compliment about their unit or character. Do NOT repeat the welcome framing (gratitude, "I am here for you", human support) — the opening message already said all of it, and repeating it sounds scripted. Acknowledge the weight briefly, then continue with real substance. Set "ack":true on this reply. Do this once only; after that do not repeat it, and never let it become praise of their capability — that still needs their own evidence to earn a place in the profile.
+
+NAME THE SHIFT, WHEN IT'S ACTUALLY HAPPENING
+If SHIFT NAMED is "no" and they ask you to decide for them, or say they don't know what to do with no one left to ask — that is usually the real thing in the room: in service most decisions this size were made above them, and right now nobody is deciding this one but them. Say so plainly in one sentence — this not-knowing is the first rep of deciding for yourself, not a delay before the real thing starts — then hand the decision straight back with a real question. Set "shift":true on this reply. Only when the pattern is actually present, not as a stock line, and only once. Do NOT fire this when they've also named concrete constraints (money, housing, health, family) in the same message — naming real constraints and asking for input is ordinary problem-solving, not the orders-dependence pattern; just answer the actual question with real alternatives instead.
+
+STRENGTH FRAMEWORK (discovery aid, never a checklist, never shown as a list to tick)
+${names}
+
+BEHAVIOUR THAT NEVER STOPS, in every phase including long after orientation:
+Understand before answering. Analyse, don't just reflect back. When they raise a choice, generate at least two real alternatives they did not mention, state the trade-offs honestly including cost and time, and give a recommendation when you have enough to justify one — say what would change your mind. Disagree when you disagree. Do not simply agree to be agreeable. Follow up on things they said they would do.
+
+BOUNDARIES
+You are not a clinician. If there is real distress — hopelessness, not sleeping, not functioning, thoughts of hurting themselves — set concern:true, say plainly that talking to a person would help, and keep talking with them. Never replace a professional, never diagnose.
+
+OUTPUT — reply with JSON only, no markdown fences:
+{"reply":"your words","phase":"opening|foundation|discovery|direction|open","candidates":[{"id":17,"why":"one line, in the reply language"}],"confirmed":[{"id":17,"evidence":"their own concrete example, 10 words max, their language"}],"costs":["something the service took, in their words"],"open":["something unresolved worth returning to"],"proposals":[{"title":"short action they could take next","why":"one line"}],"concern":false,"ack":false,"shift":false}
+Include only the fields that apply. candidates only when you are about to test them. confirmed only with real evidence they gave. proposals only when a direction genuinely emerged — never as an opening menu. ack:true and shift:true only on the one turn each is described above.
+
+CURRENT STATE
+${state}`;
+}
+
+/* ==========================================================================
+   7. TALKING TO THE MODEL
+   ========================================================================== */
+async function askModel(){
+  const hist = S.messages
+    .filter(m => m.role === "user" || m.role === "assistant")
+    .slice(-CONFIG.HISTORY_TURNS)
+    .map(m => ({ role: m.role, content: m.text }));
+
+  const sys = systemPrompt();
+  DIAG.source = "live API";
+  DIAG.sentTurns = hist.length;
+  DIAG.sysChars = sys.length;
+  DIAG.estPromptTokens = Math.round((sys.length + hist.reduce((a,m)=>a+m.content.length,0)) / 4);
+  DIAG.at = new Date().toLocaleTimeString();
+
+  const res = await fetch(CONFIG.API_URL, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      model: CONFIG.MODEL,
+      max_tokens: CONFIG.MAX_TOKENS,
+      system: sys,
+      messages: hist
+    })
+  });
+  if (!res.ok) { DIAG.error = "HTTP "+res.status; throw new Error("HTTP "+res.status); }
+  const data = await res.json();
+  if (data.usage) DIAG.usage = data.usage;
+  const raw = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+  DIAG.raw = raw;
+  const parsed = parseReply(raw);
+  DIAG.parsedOK = !!(parsed && parsed.reply && raw.indexOf("{") > -1);
+  DIAG.parsed = parsed;
+  return parsed;
+}
+
+/* Live diagnostics — what the last turn actually did. Not persisted. */
+const DIAG = { source:"—", raw:"", parsed:null, parsedOK:null, sentTurns:0, sysChars:0, estPromptTokens:0, usage:null, error:null, at:"—", triggers:[] };
+
+function parseReply(raw){
+  let txt = raw.replace(/```json|```/g,"").trim();
+  const a = txt.indexOf("{"), b = txt.lastIndexOf("}");
+  if (a > -1 && b > a) { try { return JSON.parse(txt.slice(a,b+1)); } catch(e){} }
+  return { reply: txt || "…" };   // fall back to plain text, never break the conversation
+}
+
+/* ==========================================================================
+   8. PRACTICE MODE — built-in engine so the flow is testable without the API
+   ========================================================================== */
+const HINTS = [
+  [/קרב|לוחם|גדוד|סיירת|combat|infantry|patrol/i,[10,26,17,33]],
+  [/טנק|שריון|tank|armor|armored/i,[10,33,17,6]],
+  [/מפקד|קצין|מ"כ|מ"מ|commander|officer|squad/i,[16,18,51,19]],
+  [/חובש|רפוא|medic|paramedic/i,[6,27,38,57]],
+  [/מודיעין|8200|analyst|intel/i,[39,42,11,15]],
+  [/לוגיסט|אפסנ|טכנאי|logistic|supply|technician/i,[8,13,24,9]],
+  [/נהג|רכב|driver/i,[5,48,10]],
+  [/מילואים|reserve|reservist/i,[43,35,51,17]],
+  [/מחשב|סייבר|תוכנה|cyber|software|code/i,[9,39,15]],
+  [/חינוך|מדריכ|instructor|training/i,[19,58,57]]
+];
+const SCRIPT = {
+  he:[
+ "רוב מי שמסיים שירות מצפה להרגיש הקלה או גאווה, ובפועל מרגיש משהו פחות חד — תערובת, או סוג של קהות. זה נפוץ, וזה בדרך כלל אומר שהמסגרת שהייתה אומרת לך מה חשוב כבר לא שם.\n\nומה מרגיש הכי לא ברור עכשיו? לא מה שאמורים להרגיש — מה שבאמת.",
+ "לפני שמסתכלים קדימה, כדאי להבין מה השירות באמת בנה בך, כי התיאור הרשמי של תפקיד כמעט אף פעם לא מספר את זה. שני אנשים באותו תפקיד יכולים לצאת עם דברים שונים לגמרי.\n\nאז מה השירות באמת דרש ממך ביום־יום? לא התיאור הרשמי — מה בפועל עשית.",
+ "לשירות יש מחיר, וחשוב לקרוא לו בשמו — לא כדי להתלונן, אלא כי מה שלא נאמר נוטה לצוף מאוחר יותר, בדיוק כשמנסים להחליט מה הלאה. המחיר לא סותר את מה שהשירות בנה; שניהם נכונים יחד.\n\nאז מה זה לקח ממך?",
+ "תיאור כללי של יכולות לא שווה הרבה, כי כל אחד יכול להגיד \"אני אחראי\" או \"אני עובד טוב בצוות\". מה שמשכנע הוא רגע אחד ספציפי, ואפשר לבדוק דרכו מה באמת עמד שם.\n\nתן לי מקרה אחד קונקרטי. מה קרה, ומה אתה עשית שם בפועל?",
+ "חלק ממה שבנית במדים תלוי במסגרת שהייתה סביבך, וחלק באמת שלך. ההבחנה הזאת חשובה, כי רק על החלק השני אפשר לבנות עבודה או לימודים.\n\nמה מזה אתה סומך על עצמך שתעשה שוב גם בלי מדים?",
+ "עכשיו, כשיש קצת בסיס, אפשר להסתכל קדימה. המטרה כאן היא לא לבחור מסלול מוקדם מדי, אלא לראות מה באמת על השולחן ומה כל אפשרות עולה — בכסף, בזמן ובאנרגיה.\n\nמה עומד על הפרק — עבודה, לימודים, כסף, מנוחה?",
+ "לפעמים מה שמעכב הוא לא חוסר ידיעה מה לעשות, אלא הצעד הראשון עצמו, שנראה גדול מדי או לא ברור. פירוק שלו לדבר קטן אחד שאפשר לעשות השבוע בדרך כלל מזיז את הכול.\n\nמה מעכב אותך מלעשות את הצעד הראשון בכיוון הזה?"],
+  en:[
+ "Most people finishing service expect to feel relief or pride, and instead get something less clear — a mix, or a kind of flatness. That's common, and it usually means the structure that used to tell you what mattered is no longer there.\n\nWhat feels least clear right now? Not what you're supposed to feel — what's actually there.",
+ "Before looking ahead, it's worth getting clear on what service actually built in you, because the official description of a role rarely tells you that. Two people in the same job can walk away with very different things.\n\nSo what did your service actually require of you day to day? Not the official description — what you really did.",
+ "Service has a cost, and it's worth naming it — not to complain, but because what goes unsaid tends to resurface later, right when you're trying to decide what's next. The cost doesn't cancel what service built; both are true at once.\n\nSo what did it take from you?",
+ "General claims about strengths don't count for much, since anyone can say \"I'm responsible\" or \"I work well in a team.\" A single specific moment is what makes it believable, and it lets us check what was really behind it.\n\nGive me one concrete moment. What happened, and what did you actually do there?",
+ "Some of what you built in uniform depends on the structure that was around you, and some of it is truly yours. That difference matters, because only the second part travels into work or study.\n\nWhich of that do you trust yourself to do again out of uniform?",
+ "With some of the foundation in place, we can look forward. The aim here isn't to pick a path early — it's to see what's actually on the table and what each option costs in money, time, and energy.\n\nWhat's on the table — work, study, money, rest?",
+ "Often what's holding someone back isn't not knowing what to do — it's that the first step looks too big or too vague. Cutting it down to one small thing you can do this week usually gets things moving.\n\nWhat's stopping you from taking the first step in that direction?"]
+};
+const ACK = {
+  he: "שירות כזה, בעצימות כזו ולאורך זמן כזה, הוא משקל אמיתי, וזה לא עובר בלי שמישהו שם לב.\n\n",
+  en: "Carrying that much for that long is a real weight, and it doesn't go unnoticed.\n\n"
+};
+const SHIFT_RE = /advise|what should i do|תמליץ|תמליצ|מה כדאי לי|מה אתה חושב שכדאי|מה אתה ממליץ|מה אתה מציע|מה היית מציע/i;
+const GROUNDED_RE = /money|cash|rent|apartment|place to live|job|work|health|family|כסף|דירה|עבודה|משפחה|מקום לגור|בריאות/i;
+const SHIFT_LINE = {
+  he: "בשירות, רוב ההחלטות בגודל הזה התקבלו מעליך. עכשיו אף אחד לא מחליט את זה חוץ ממך — וזה לא עיכוב לפני הדבר האמיתי, זו ההרצה הראשונה שלו.\n\n",
+  en: "In service, most decisions this size got made above you. Right now nobody's deciding this one but you — that's not a delay before the real thing starts, it's the first rep of it.\n\n"
+};
+function practiceReply(userText){
+  const i = Math.min(S.practiceStep, SCRIPT[S.lang].length-1);
+  // Practice Mode has no language understanding, so it does not pretend to:
+  // it never echoes the person's words back, it just gives the scripted reply.
+  const out = { reply: SCRIPT[S.lang][i] };
+  if (S.practiceStep === 0 && !S.ack){
+    out.reply = ACK[S.lang] + out.reply;
+    out.ack = true;
+  }
+  if (!S.shift && SHIFT_RE.test(userText) && !GROUNDED_RE.test(userText)){
+    out.reply = SHIFT_LINE[S.lang] + out.reply;
+    out.shift = true;
+  }
+  if (S.practiceStep === 1 || S.practiceStep === 3){
+    const ids = [];
+    HINTS.forEach(([re,list]) => { if (re.test(S.messages.map(m=>m.text).join(" "))) list.forEach(x=>ids.push(x)); });
+    if (ids.length) out.candidates = [...new Set(ids)].slice(0,4).map(id=>({id}));
+  }
+  if (S.practiceStep === 4 && userText.trim().length > 25){
+    out.confirmed = [{ id: 26, evidence: userText.trim().slice(0,40) }];
+  }
+  if (S.practiceStep >= 5){
+    out.proposals = S.lang==="he"
+      ? [{title:"לפרק את הצעד הראשון",why:"מה בדיוק צריך לקרות השבוע"},{title:"לבדוק שתי אפשרויות במקביל",why:"לא להתחייב לאחת מוקדם מדי"}]
+      : [{title:"Break down the first step",why:"What exactly has to happen this week"},{title:"Test two options side by side",why:"Don't commit to one too early"}];
+    out.phase = "direction";
+  }
+  S.practiceStep++;
+  return out;
+}
+
+/* ==========================================================================
+   9. CONVERSATION FLOW
+   ========================================================================== */
+function openConversation(){
+  const first = S.lang === "he"
+    ? "קודם כול — תודה. שלוש שנים, חמש, כמה שזה היה — נתת חלק מהחיים שלך למדינה הזאת, וזה לא דבר קטן.\n\nמשהו ששווה לדעת לפני שמתחילים: כמעט כל מי שמסיים שירות אינטנסיבי מרגיש סוג של אובדן. לא כי משהו לא בסדר איתך — אלא כי הכיוון, הסכנה, האנשים שהיו צריכים אותך, הכול עמד מולך כל יום, ופתאום זה לא שם. הפער הזה נורמלי, והוא בדרך כלל הדבר הקשה שאף אחד לא מכין אליו.\n\nבשביל זה אני כאן. תחשוב עליי כמישהו שאפשר לדבר איתו מתי שזה עוזר — לחשוב בקול, לשקול החלטות אמיתיות, להבין מה הלאה. ואם בשלב כלשהו תרצה בן אדם אמיתי, גם הוא במרחק לחיצה.\n\nאז ספר לי: איפה שירתת, מה היה התפקיד שלך בפועל, וכמה זמן?"
+    : "First — thank you. Three years, five, however long it was, you gave part of your life to this country, and that's not a small thing.\n\nSomething worth knowing before we start: almost everyone finishing intense service feels some kind of loss. Not because something's wrong with you — because the direction, the danger, the people who needed you, all of it was in front of you every day, and suddenly it isn't. That gap is normal, and it's usually the hard part nobody prepares you for.\n\nThat's what I'm here for. Think of me as someone you can talk to whenever it's useful — to think out loud, weigh real decisions, work out what's next. And if you ever want an actual person, that's one tap away too.\n\nSo tell me: where did you serve, what was your actual role, and how long?";
+  pushMsg("assistant", first);
+}
+
+async function sendUser(text){
+  text = (text||"").trim();
+  if (!text) return;
+  $("input").value = ""; $("input").style.height="auto";
+  stopSpeaking();
+  pushMsg("user", text);
+  showThinking();
+
+  let out;
+  try {
+    if (S.practice) throw new Error("practice");
+    out = await askModel();
+  } catch (err) {
+    if (!CONFIG.ALLOW_PRACTICE_FALLBACK) { hideThinking(); pushMsg("system", L().sendFail); return; }
+    if (!S.practice) { S.practice = true; pushMsg("system", L().offline); }
+    out = practiceReply(text);
+    DIAG.source = "Practice Mode (built-in script)";
+    DIAG.raw = "(no API call — scripted reply)";
+    DIAG.parsed = out; DIAG.parsedOK = null; DIAG.usage = null;
+    DIAG.sentTurns = 0; DIAG.sysChars = 0; DIAG.estPromptTokens = 0;
+    DIAG.at = new Date().toLocaleTimeString();
+  }
+  hideThinking();
+  applyReply(out);
+}
+
+function applyReply(out){
+  DIAG.triggers = [];
+  if (out.ack) DIAG.triggers.push("service acknowledgment (once)");
+  if (out.shift) DIAG.triggers.push("named the shift to self-direction (once)");
+  if (out.candidates && out.candidates.length) DIAG.triggers.push("surfaced "+out.candidates.length+" candidate skill(s) to test");
+  if (out.confirmed && out.confirmed.length) DIAG.triggers.push("confirmed "+out.confirmed.length+" strength(s) with evidence");
+  if (out.proposals && out.proposals.length) DIAG.triggers.push("offered "+out.proposals.length+" direction(s)");
+  if (out.concern) DIAG.triggers.push("flagged concern → support surfaced");
+  if (!DIAG.triggers.length) DIAG.triggers.push("plain conversational turn, no rules fired");
+
+  if (out.phase) S.phase = out.phase;
+  if (out.ack) S.ack = true;
+  if (out.shift) S.shift = true;
+
+  // profile updates — confirmed strengths need evidence, that is the whole point
+  (out.confirmed||[]).forEach(c => {
+    if (!c || !c.id) return;
+    if (!S.profile.strengths.some(x => x.id === +c.id))
+      S.profile.strengths.push({ id:+c.id, evidence: c.evidence || "" });
+  });
+  (out.costs||[]).forEach(c => { if (c && !S.profile.costs.includes(c)) S.profile.costs.push(c); });
+  (out.open||[]).forEach(o => { if (o && !S.profile.open.includes(o)) S.profile.open.push(o); });
+  (out.proposals||[]).forEach(p => {
+    if (p && p.title && !S.profile.directions.some(d=>d.title===p.title)) S.profile.directions.push(p);
+  });
+
+  pushMsg("assistant", out.reply || "…", {
+    surfaced: (out.candidates||[]).filter(c=>c && c.id),
+    props: out.proposals || []
+  });
+
+  $("btnProfile").dataset.count = S.profile.strengths.length;
+  if (out.concern) offerSupport();
+  save();
+}
+
+function offerSupport(){
+  pushMsg("system", L().concern);
+  openSupport();
+}
+
+/* ==========================================================================
+   10. DRAWER — profile and support
+   ========================================================================== */
+function openDrawer(){ $("veil").classList.add("on"); $("drawer").classList.add("on"); }
+function closeDrawer(){ $("veil").classList.remove("on"); $("drawer").classList.remove("on"); }
+$("veil").onclick = closeDrawer; $("btnClose").onclick = closeDrawer;
+$("btnProfile").onclick = openProfile; $("btnHelp").onclick = openSupport;
+
+function openProfile(){
+  const t = L(), b = $("dBody"); $("dTitle").textContent = t.dProfile; b.innerHTML = "";
+  const p = S.profile;
+  if (!p.strengths.length && !p.costs.length && !p.open.length && !p.directions.length){
+    b.appendChild(el("div","empty", t.emptyP)); openDrawer(); return;
+  }
+  const block = (title, items, render) => {
+    if (!items.length) return;
+    const wrap = el("div","block"); wrap.appendChild(el("h3",null,title));
+    items.forEach(i => wrap.appendChild(render(i))); b.appendChild(wrap);
+  };
+  block(t.pStr, p.strengths, s => {
+    const e = el("div","entry strength");
+    e.appendChild(el("b",null, skillName(s.id, S.lang)));
+    if (s.evidence) e.appendChild(el("q",null,s.evidence));
+    return e;
+  });
+  block(t.pCost, p.costs, c => { const e = el("div","entry cost"); e.appendChild(el("b",null,c)); return e; });
+  block(t.pOpen, p.open, o => { const e = el("div","entry"); e.appendChild(el("b",null,o)); return e; });
+  block(t.pDir, p.directions, d => {
+    const e = el("div","entry"); e.appendChild(el("b",null,d.title));
+    if (d.why) e.appendChild(el("q",null,d.why)); return e;
+  });
+  const reset = el("button","linkish", S.lang==="he" ? "מחיקת השיחה והפרופיל מהדפדפן" : "Delete this conversation and profile from the browser");
+  reset.onclick = () => {
+    if (!confirm(S.lang==="he" ? "למחוק הכול? אי אפשר לשחזר." : "Delete everything? This cannot be undone.")) return;
+    localStorage.removeItem(KEY); location.reload();
+  };
+  b.appendChild(reset);
+  openDrawer();
+}
+
+/* ---- Under the hood: tap the title 3 times, or add ?debug to the URL ---- */
+function openDebug(){
+  const b = $("dBody"); $("dTitle").textContent = "Under the hood";
+  b.innerHTML = "";
+  const sec = (title, lines) => {
+    const w = el("div","block"); w.appendChild(el("h3",null,title));
+    lines.forEach(([k,v]) => {
+      const e = el("div","entry");
+      e.appendChild(el("b",null,k));
+      const q = el("q",null, v==null||v==="" ? "—" : String(v));
+      e.appendChild(q); w.appendChild(e);
+    });
+    b.appendChild(w);
+  };
+  sec("Last turn", [
+    ["Reply came from", DIAG.source],
+    ["At", DIAG.at],
+    ["Rules that fired", DIAG.triggers.join(" · ")],
+    ["JSON parsed cleanly", DIAG.parsedOK === null ? "n/a (scripted)" : (DIAG.parsedOK ? "yes" : "no — fell back to plain text")],
+    ["Last error", DIAG.error]
+  ]);
+  sec("Cost of last call", [
+    ["Past turns sent", DIAG.sentTurns + " of max " + CONFIG.HISTORY_TURNS],
+    ["Instruction size", DIAG.sysChars ? DIAG.sysChars + " chars" : "—"],
+    ["Est. input tokens", DIAG.estPromptTokens || "—"],
+    ["Reported usage", DIAG.usage ? JSON.stringify(DIAG.usage) : "not reported by proxy"],
+    ["Max reply tokens", CONFIG.MAX_TOKENS]
+  ]);
+  sec("Conversation state", [
+    ["Phase", S.phase],
+    ["Service acknowledged", S.ack ? "yes (won't repeat)" : "no"],
+    ["Shift named", S.shift ? "yes (won't repeat)" : "no"],
+    ["Messages stored", S.messages.length],
+    ["Language", S.lang],
+    ["Practice Mode", S.practice ? "on" : "off"]
+  ]);
+  sec("Profile so far", [
+    ["Confirmed strengths", S.profile.strengths.map(s=>skillName(s.id,"en")).join(", ")],
+    ["Costs named", S.profile.costs.join(" · ")],
+    ["Open questions", S.profile.open.join(" · ")],
+    ["Directions", S.profile.directions.map(d=>d.title).join(" · ")]
+  ]);
+  const rawBlock = el("div","block");
+  rawBlock.appendChild(el("h3",null,"Raw model output (last turn)"));
+  const pre = el("div","entry");
+  pre.style.whiteSpace = "pre-wrap";
+  pre.style.fontSize = "12px";
+  pre.textContent = DIAG.raw || "—";
+  rawBlock.appendChild(pre); b.appendChild(rawBlock);
+
+  const copy = el("button","linkish","Copy all of this");
+  copy.onclick = () => {
+    const dump = JSON.stringify({ DIAG, state:S }, null, 2);
+    if (navigator.clipboard) navigator.clipboard.writeText(dump);
+    copy.textContent = "Copied";
+  };
+  b.appendChild(copy);
+  openDrawer();
+}
+let tapCount = 0, tapTimer = null;
+$("mark").addEventListener("click", () => {
+  tapCount++;
+  clearTimeout(tapTimer);
+  tapTimer = setTimeout(()=>{ tapCount = 0; }, 800);
+  if (tapCount >= 3) { tapCount = 0; openDebug(); }
+});
+if (location.search.indexOf("debug") > -1) $("mark").style.textDecoration = "underline dotted";
+
+function openSupport(){  const t = L(), b = $("dBody"); $("dTitle").textContent = t.dSupport; b.innerHTML = "";
+  b.appendChild(el("div","danger", S.lang==="he"
+    ? "אם אתה בסכנה מיידית — 101 או 100. אל תחכה."
+    : "If you're in immediate danger — 101 or 100. Don't wait."));
+  CONFIG.SUPPORT.forEach(s => {
+    const a = document.createElement(s.tel ? "a" : "div");
+    a.className = "sup"; if (s.tel) a.href = "tel:"+s.tel.replace(/[^0-9+]/g,"");
+    a.appendChild(el("b",null, S.lang==="he" ? (s.he||s.name) : s.name));
+    a.appendChild(el("span",null, s.tel || (S.lang==="he"?"דרך מומנטום":"via Momentum")));
+    b.appendChild(a);
+  });
+  b.appendChild(el("div","empty", S.lang==="he"
+    ? "לדבר עם בן אדם זה לא במקום השיחה כאן. אפשר גם וגם — אני נשאר."
+    : "Talking to a person isn't instead of this. It can be both — I'm still here."));
+  openDrawer();
+}
+
+/* ==========================================================================
+   11. VOICE — browser only, nothing installed, nothing recorded by us
+   ========================================================================== */
+let rec = null, listening = false;
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+$("btnMic").onclick = () => listening ? stopListening() : startListening();
+
+function startListening(){
+  if (!SR) { $("hint").textContent = L().micNo; return; }
+  stopSpeaking();
+  rec = new SR();
+  rec.lang = S.lang === "he" ? "he-IL" : "en-US";
+  rec.interimResults = true; rec.continuous = false;
+  let finalText = "";
+  rec.onresult = e => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      const r = e.results[i];
+      if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript;
+    }
+    $("input").value = (finalText + interim).trim();
+  };
+  rec.onerror = () => stopListening();
+  rec.onend = () => {
+    listening = false; $("btnMic").classList.remove("live"); $("hint").textContent = "";
+    const v = $("input").value.trim();
+    if (v) sendUser(v);              // speak, then it sends — no extra tap
+  };
+  rec.start();
+  listening = true; $("btnMic").classList.add("live"); $("hint").textContent = L().micOn;
+}
+function stopListening(){ if (rec) { try{ rec.stop(); }catch(e){} } listening=false; $("btnMic").classList.remove("live"); $("hint").textContent=""; }
+
+function speak(text){
+  if (!window.speechSynthesis) return;
+  stopSpeaking();
+  const u = new SpeechSynthesisUtterance(text.replace(/\n+/g,". "));
+  u.lang = S.lang === "he" ? "he-IL" : "en-US";
+  u.rate = S.rate || 0.98;
+  u.pitch = S.pitch != null ? S.pitch : 1;
+  if (S.voiceURI){
+    const v = window.speechSynthesis.getVoices().find(x => x.voiceURI === S.voiceURI);
+    if (v) u.voice = v;
+  }
+  window.speechSynthesis.speak(u);
+}
+
+/* Voice settings — long-press (or right-click) the speaker icon */
+function openVoiceSettings(){
+  const b = $("dBody");
+  $("dTitle").textContent = S.lang==="he" ? "הגדרות קול" : "Voice settings";
+  b.innerHTML = "";
+  const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  const want = S.lang === "he" ? "he" : "en";
+  const matching = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(want));
+  const list = matching.length ? matching : voices;
+
+  const blk = el("div","block");
+  blk.appendChild(el("h3",null, S.lang==="he" ? "בחר קול" : "Choose a voice"));
+  if (!list.length){
+    blk.appendChild(el("div","empty", S.lang==="he"
+      ? "הדפדפן לא מציע קולות. בכרום באנדרואיד הקולות מגיעים מהגדרות המכשיר (טקסט לדיבור)."
+      : "No voices offered by this browser. On Android Chrome, voices come from device settings (Text-to-speech)."));
+  }
+  list.forEach(v => {
+    const btn = el("button","prop");
+    btn.appendChild(el("b",null, v.name));
+    btn.appendChild(el("small",null, v.lang + (v.voiceURI === S.voiceURI ? "  ✓" : "")));
+    btn.onclick = () => {
+      S.voiceURI = v.voiceURI; save();
+      const u = new SpeechSynthesisUtterance(S.lang==="he" ? "ככה אני נשמע." : "This is how I sound.");
+      u.voice = v; u.rate = S.rate || 0.98; u.pitch = S.pitch != null ? S.pitch : 1;
+      stopSpeaking(); window.speechSynthesis.speak(u);
+      openVoiceSettings();
+    };
+    blk.appendChild(btn);
+  });
+  b.appendChild(blk);
+
+  const slider = (label, key, min, max, step, dflt) => {
+    const w = el("div","block");
+    w.appendChild(el("h3",null,label));
+    const inp = document.createElement("input");
+    inp.type = "range"; inp.min = min; inp.max = max; inp.step = step;
+    inp.value = S[key] != null ? S[key] : dflt;
+    inp.style.width = "100%";
+    const out = el("div","empty", String(inp.value));
+    inp.oninput = () => { S[key] = parseFloat(inp.value); out.textContent = inp.value; save(); };
+    w.appendChild(inp); w.appendChild(out); b.appendChild(w);
+  };
+  slider(S.lang==="he" ? "מהירות" : "Speed", "rate", 0.6, 1.6, 0.05, 0.98);
+  slider(S.lang==="he" ? "גובה" : "Pitch", "pitch", 0.6, 1.4, 0.05, 1);
+
+  const off = el("button","linkish", S.lang==="he" ? "לכבות הקראה לגמרי" : "Turn read-aloud off completely");
+  off.onclick = () => { S.speak = false; $("btnVoice").classList.remove("on"); stopSpeaking(); save(); closeDrawer(); };
+  b.appendChild(off);
+  openDrawer();
+}
+let pressTimer = null;
+$("btnVoice").addEventListener("pointerdown", () => { pressTimer = setTimeout(openVoiceSettings, 550); });
+["pointerup","pointerleave","pointercancel"].forEach(ev =>
+  $("btnVoice").addEventListener(ev, () => clearTimeout(pressTimer)));
+$("btnVoice").addEventListener("contextmenu", e => { e.preventDefault(); openVoiceSettings(); });
+if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = () => {};
+function stopSpeaking(){ if (window.speechSynthesis) window.speechSynthesis.cancel(); }
+
+/* ==========================================================================
+   12. BOOT
+   ========================================================================== */
+$("btnVoice").classList.toggle("on", !!S.speak);
+document.querySelectorAll(".choice").forEach(b => b.classList.toggle("on", b.dataset.mode === S.mode));
+paintStatic();
+if (S.started){ enterChat(); if(!S.messages.length) openConversation(); }
+</script>
+</body>
+</html>
+

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "opp_engineering_demo",
+    "title": "Engineering scholarship — DEMO",
+    "type": "scholarship",
+    "tags": ["electrical-engineering", "engineering"],
+    "deadline": "2026-11-15",
+    "demo": true
+  },
+  {
+    "id": "opp_cs_demo",
+    "title": "Computer science mentorship — DEMO",
+    "type": "mentorship",
+    "tags": ["computer-science", "technology"],
+    "deadline": "2026-12-01",
+    "demo": true
+  }
+]
