@@ -1,2 +1,2 @@
 # momentum-companion-demo
-Prototype for Momentum's hybrid post-service companion: app-based Passport, proactive opportunities, and an AI agent for ongoing guidance.
+Prototype integrating the existing Transition Companion with a Momentum Passport, ecosystem and AI agent.
