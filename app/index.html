@@ -835,7 +835,34 @@ let S = load() || {
   practice: false, practiceStep: 0, ack: false, shift: false
 };
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ return null; } }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+const MOMENTUM_API = "https://jlckekgauwhhqqvzkvmln.supabase.co/functions/v1/momentum-passport";
+
+function save(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(S));
+  }catch(e){}
+
+  fetch(MOMENTUM_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      civilian_skills: S.profile.strengths || [],
+      current_direction:
+        S.profile.directions?.length
+          ? S.profile.directions[S.profile.directions.length - 1].title
+          : null,
+      direction_confidence: null,
+      emerging_interests: S.profile.open || [],
+      goals: S.profile.directions || [],
+      preferences: {
+        costs: S.profile.costs || [],
+        language: S.lang
+      }
+    })
+  }).catch(err => console.error("Momentum sync failed:", err));
+}
 const L = () => T[S.lang];
 
 /* ==========================================================================
