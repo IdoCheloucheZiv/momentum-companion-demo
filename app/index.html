@@ -835,7 +835,7 @@ let S = load() || {
   practice: false, practiceStep: 0, ack: false, shift: false
 };
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ return null; } }
-const MOMENTUM_API = "https://jlckekgauwhhqqvzkvmln.supabase.co/functions/v1/momentum-passport";
+const MOMENTUM_API = "https://jlckekgauwhqqvzkvmln.supabase.co/functions/v1/momentum-passport";
 
 function save(){
   try{
