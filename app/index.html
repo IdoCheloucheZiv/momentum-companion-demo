@@ -868,6 +868,21 @@ const CIVILIAN_DIRECTIONS = [
   [/לימוד|ללמוד|studies|study/i,'לימודים']
 ];
 let passportSyncRunning=false, passportSyncPending=false;
+let pendingPassportInsights={skills:[],interests:[],goals:[],direction:null};
+const PASSPORT_SENSITIVE=/גדוד|פלוגה|קורס קצינים|יחיד[הת]|בסיס|מבצע|קרב|צה"ל|צבא|קצין|מפקד|חייל|סיווג|סודי|מסווג|נפגע|טראומ|ptsd|combat|battalion|military|classified|unit|officer/i;
+function acceptPassportUpdate(update){
+  if(!update || typeof update!=='object' || S.practice)return;
+  const safeArray=(v)=>Array.isArray(v)?v.filter(x=>typeof x==='string'&&x.trim().length>1&&x.length<=100&&!PASSPORT_SENSITIVE.test(x)).map(x=>x.trim()).slice(0,8):[];
+  const merge=(a,b)=>[...new Set([...a,...b])].slice(0,30);
+  pendingPassportInsights.skills=merge(pendingPassportInsights.skills,safeArray(update.civilian_skills));
+  pendingPassportInsights.interests=merge(pendingPassportInsights.interests,safeArray(update.interests));
+  pendingPassportInsights.goals=merge(pendingPassportInsights.goals,safeArray(update.goals));
+  const d=update.current_direction;
+  if(typeof d==='string'&&d.trim().length>1&&d.length<=100&&!PASSPORT_SENSITIVE.test(d))
+    pendingPassportInsights.direction=d.trim();
+  scheduleLivingPassport();
+}
+
 function livingPassportSnapshot(){
   const ids=[...new Set((S.profile?.strengths||[]).map(x=>Number(x.id)))]
     .filter(id=>Number.isInteger(id)&&SKILLS.some(row=>Number(row[0])===id));
@@ -889,16 +904,21 @@ async function syncLivingPassport(){
   if(!momentumUser||!momentumClient)return;
   if(passportSyncRunning){passportSyncPending=true;return;}
   passportSyncRunning=true;
-  const id=momentumUser.id;
   try{
     const snap=livingPassportSnapshot();
-    if(!snap.skills.length&&!snap.directions.length)return;
-    const {error}=await momentumClient.rpc('demo_sync_passport',{
-      p_email:id,
-      p_skills:snap.skills,
-      p_interests:snap.directions.map(x=>'אפשרות לבדיקה: '+x)
+    const batch=JSON.parse(JSON.stringify(pendingPassportInsights));
+    const skills=[...new Set([...snap.skills,...batch.skills])];
+    const interests=[...new Set([...snap.directions.map(x=>'אפשרות לבדיקה: '+x),...batch.interests])];
+    if(!skills.length&&!interests.length&&!batch.goals.length&&!batch.direction)return;
+    const {error}=await momentumClient.rpc('demo_sync_insights',{
+      p_email:momentumUser.id,p_skills:skills,p_interests:interests,
+      p_goals:batch.goals,p_direction:batch.direction
     });
     if(error)throw error;
+    // Remove only successfully saved insights, without dropping updates that arrived during the request.
+    for(const k of ['skills','interests','goals'])
+      pendingPassportInsights[k]=pendingPassportInsights[k].filter(x=>!batch[k].includes(x));
+    if(pendingPassportInsights.direction===batch.direction)pendingPassportInsights.direction=null;
   }catch(err){console.warn('Living Passport sync failed:',err?.message||err);}
   finally{
     passportSyncRunning=false;
@@ -1182,7 +1202,18 @@ async function askModel(){
     .map(m => ({ role: m.role, content: m.text }));
 
   const ref = buildReference();
-  const sys = systemPrompt(ref);
+  const sys = systemPrompt(ref) + `
+
+LIVING PASSPORT — REQUIRED IN THE SAME JSON RESPONSE:
+Include "passport_update" only for civilian facts that the USER explicitly stated in the conversation, not your suggestions or assumptions.
+Format: {"passport_update":{"interests":["..."],"goals":["..."],"current_direction":null,"civilian_skills":["..."]}}.
+Interests: subject the user explicitly wants to explore, e.g. "משפטים". Goals: concrete plans the user explicitly described, e.g. "ללמוד משפטים", "להתכונן לפסיכומטרי במשך 3 חודשים".
+Current_direction: only if the user clearly commits to a direction; mere curiosity is an interest, not a confirmed direction.
+Civilian skills: only when supported by user's concrete description of what they actually did, expressed as general transferable skills, not a military title.
+No military unit, rank, location, training operation, event, person, health, trauma, identifying details, or direct quote may appear in passport_update.
+Do not repeat old data unless the user's latest message provides additional support. Never infer psychometric scores or acceptance requirements.
+Do not include sensitive military facts in the Passport. Do not include anything inferred solely from the assistant reply.
+Keep all the existing JSON fields and reply as usual.`;
   DIAG.source = "live API";
   DIAG.refs = ref.labels; DIAG.refChars = ref.text.length;
   DIAG.sentTurns = hist.length;
