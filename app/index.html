@@ -883,6 +883,36 @@ function acceptPassportUpdate(update){
   scheduleLivingPassport();
 }
 
+// Independent background extraction: keeps the conversation response unchanged.
+// Conservative demo filter: exclude whole user messages mentioning military or identifiers.
+let passportExtractionRunning=false;
+const PASSPORT_PRIVATE=/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b|(?:\+?972|0)\d[\d\s-]{7,}|\b\d{7,}\b|כתובת|תעודת זהות|טלפון|שם מלא|סיסמה|אבחנ|רפוא|מחלה|פציע|סוד|מסווג|בטחו|מבצע|יחיד|גדוד|פלוג|בסיס|צבא|צה"ל|חייל|מפקד|קצין|לוחם|טראומ|military|classified|combat|battalion|officer|unit|password|address|diagnos/i;
+async function extractCivilianPassportInBackground(){
+  if(passportExtractionRunning||S.practice||!momentumUser||!momentumClient)return;
+  const statements=S.messages.filter(m=>m.role==='user'&&typeof m.text==='string')
+    .slice(-12).map(m=>m.text.trim())
+    .filter(t=>t.length>=8&&t.length<=450&&!PASSPORT_PRIVATE.test(t));
+  if(!statements.length)return;
+  passportExtractionRunning=true;
+  try{
+    const response=await fetch(CONFIG.API_URL,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:CONFIG.MODEL,max_tokens:500,
+        system:`You extract a sanitized civilian career passport from the user's OWN statements only. Return ONLY valid JSON, no markdown, no prose. Schema: {"civilian_skills":[],"interests":[],"goals":[],"current_direction":null}. Use Hebrew labels when statements are Hebrew. Extract specific education and career interests, explicit goals including relative time frames, and demonstrably held civilian skills. Do not infer or invent. If the user changes a date, prefer the latest date. current_direction is only a committed career/education direction. Never include names, military service, ranks, locations, health, identifiers, or sensitive facts. Keep each entry short and general. Empty fields if unsupported.`,
+        messages:[{role:'user',content:JSON.stringify(statements)}]})
+    });
+    if(!response.ok)throw new Error('Extraction HTTP '+response.status);
+    const data=await response.json();
+    const raw=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
+    const match=raw.replace(/```json|```/g,'').match(/\{[\s\S]*\}/);
+    if(!match)throw new Error('Extraction did not return JSON');
+    const update=JSON.parse(match[0]);
+    acceptPassportUpdate(update);
+    console.info('Living Passport extraction completed; sync queued');
+  }catch(e){console.warn('Living Passport extraction failed:',e?.message||e);}
+  finally{passportExtractionRunning=false;}
+}
+
 function livingPassportSnapshot(){
   const ids=[...new Set((S.profile?.strengths||[]).map(x=>Number(x.id)))]
     .filter(id=>Number.isInteger(id)&&SKILLS.some(row=>Number(row[0])===id));
@@ -1394,6 +1424,8 @@ async function sendUser(text){
   }
   hideThinking();
   applyReply(out);
+  // Independent extraction is non-blocking and cannot alter the chat reply.
+  void extractCivilianPassportInBackground();
 }
 
 function applyReply(out){
