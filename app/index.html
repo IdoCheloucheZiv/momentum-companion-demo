@@ -889,21 +889,15 @@ async function syncLivingPassport(){
   if(!momentumUser||!momentumClient)return;
   if(passportSyncRunning){passportSyncPending=true;return;}
   passportSyncRunning=true;
-  const uid=momentumUser.id;
+  const id=momentumUser.id;
   try{
     const snap=livingPassportSnapshot();
     if(!snap.skills.length&&!snap.directions.length)return;
-    const {data:existing,error:readError}=await momentumClient.from('passports')
-      .select('civilian_skills,emerging_interests,preferences').eq('auth_user_id',uid).maybeSingle();
-    if(readError)throw readError;
-    if(momentumUser?.id!==uid)return;
-    const oldSkills=Array.isArray(existing?.civilian_skills)?existing.civilian_skills.filter(x=>typeof x==='string'):[];
-    const oldInterests=Array.isArray(existing?.emerging_interests)?existing.emerging_interests.filter(x=>typeof x==='string'):[];
-    const skills=[...new Set([...oldSkills,...snap.skills])];
-    const interests=[...new Set([...oldInterests,...snap.directions.map(x=>'אפשרות לבדיקה: '+x)])];
-    if(JSON.stringify(skills)===JSON.stringify(oldSkills)&&JSON.stringify(interests)===JSON.stringify(oldInterests))return;
-    const payload={auth_user_id:uid,user_id:uid,civilian_skills:skills,emerging_interests:interests,updated_at:new Date().toISOString()};
-    const {error}=await momentumClient.from('passports').upsert(payload,{onConflict:'auth_user_id'});
+    const {error}=await momentumClient.rpc('demo_sync_passport',{
+      p_email:id,
+      p_skills:snap.skills,
+      p_interests:snap.directions.map(x=>'אפשרות לבדיקה: '+x)
+    });
     if(error)throw error;
   }catch(err){console.warn('Living Passport sync failed:',err?.message||err);}
   finally{
@@ -1468,7 +1462,7 @@ function openProfile(){
     });
     use.appendChild(list); b.appendChild(use);
   }
-  const reset = el("button","linkish", S.lang==="he" ? "מחיקת השיחה והפרופיל מהדפדפן" : "Delete this conversation and profile from the browser");
+  const reset = el("button","linkish", S.lang==="he" ? "מחיקת השיחה והפרופיל המקומיים מהדפדפן" : "Delete this conversation and profile from the browser");
   reset.onclick = () => {
     if (!confirm(S.lang==="he" ? "למחוק הכול? אי אפשר לשחזר." : "Delete everything? This cannot be undone.")) return;
     S = {lang:S.lang,mode:'type',started:false,phase:'opening',messages:[],profile:{strengths:[],costs:[],open:[],directions:[]},practice:false,practiceStep:0,ack:false,shift:false};
@@ -1835,10 +1829,10 @@ sizeTopicPanel(); paintTopicPanel();
 #momentum-logout{position:fixed;bottom:12px;left:12px;z-index:1000;font:12px Heebo,Arial,sans-serif;border:1px solid #bbb;background:#fff;padding:7px 11px;border-radius:7px;cursor:pointer;display:none}
 </style>
 <div id="momentum-auth"><div class="auth-card">
-<h2>Momentum Companion</h2><p>התחברות אישית ומאובטחת. לכל משתמש Passport משלו.</p>
-<form id="momentum-auth-form"><input id="momentum-email" type="email" autocomplete="email" placeholder="כתובת אימייל" required><input id="momentum-password" type="password" autocomplete="current-password" minlength="6" placeholder="סיסמה (לפחות 6 תווים)" required><button id="momentum-login" type="submit">התחברות</button><button id="momentum-register" type="button" class="secondary">הרשמה חדשה</button></form>
+<h2>Momentum Companion</h2><p>ברוך הבא! מה כתובת האימייל שלך?</p><p style="font-size:12px">דמו ללא אימות זהות. השתמשו במידע מומצא ולא רגיש בלבד.</p>
+<form id="momentum-auth-form"><input id="momentum-email" type="email" autocomplete="email" placeholder="כתובת אימייל" required><button id="momentum-login" type="submit">בוא נתחיל</button></form>
 <p id="momentum-auth-message" class="auth-message" role="status">טוען...</p></div></div>
-<button id="momentum-logout" type="button">התנתקות</button>
+<button id="momentum-logout" type="button">החלף משתמש</button>
 <button id="momentum-passport-button" type="button">ה-Passport שלי</button>
 <div id="momentum-passport-panel" hidden><div class="panel-inner">
 <h2>ה-Passport האזרחי שלי</h2>
@@ -1860,40 +1854,38 @@ async function awaitMomentumReset(){
   location.reload();
 }
 async function openMomentumPassport(){
-  if (!momentumUser) return;
+  if(!momentumUser)return;
   const panel=document.getElementById('momentum-passport-panel');
   panel.hidden=false;
-  const {data,error}=await momentumClient.from('passports')
-    .select('civilian_skills,current_direction,emerging_interests,goals')
-    .eq('auth_user_id',momentumUser.id).maybeSingle();
-  if(error){document.getElementById('momentum-passport-status').textContent='טעינה נכשלה: '+error.message;return;}
+  const status=document.getElementById('momentum-passport-status');
+  status.textContent='טוען Passport...';
+  const {data,error}=await momentumClient.rpc('demo_get_passport',{p_email:momentumUser.id});
+  if(error){status.textContent='שגיאת טעינה: '+error.message;return;}
+  const record=data;
   const asLines=x=>Array.isArray(x)?x.filter(v=>typeof v==='string').join('\\n'):'';
-  document.getElementById('momentum-passport-skills').value=asLines(data?.civilian_skills);
-  document.getElementById('momentum-passport-direction').value=data?.current_direction||'';
-  document.getElementById('momentum-passport-interests').value=asLines(data?.emerging_interests);
-  document.getElementById('momentum-passport-goals').value=asLines(data?.goals);
-  document.getElementById('momentum-passport-status').textContent='מתעדכן אוטומטית מהשיחה. מידע רגיש ותמלילי שיחה אינם נשמרים ב-Passport.';
+  document.getElementById('momentum-passport-skills').value=asLines(record?.civilian_skills);
+  document.getElementById('momentum-passport-direction').value=record?.current_direction||'';
+  document.getElementById('momentum-passport-interests').value=asLines(record?.emerging_interests);
+  document.getElementById('momentum-passport-goals').value=asLines(record?.goals);
+  status.textContent='ה-Passport מתעדכן אוטומטית. דמו ללא אימות זהות — מידע פיקטיבי בלבד.';
 }
-(async function initMomentumAuth(){
-  if(!window.supabase?.createClient){momentumAuthMessage('לא ניתן לטעון את מערכת ההתחברות. בדקו חיבור לאינטרנט.');return;}
-  momentumClient=window.supabase.createClient(MOMENTUM_URL,MOMENTUM_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+(async function initMomentumDemo(){
+  if(!window.supabase?.createClient){momentumAuthMessage('לא ניתן לטעון את Supabase.');return;}
+  momentumClient=window.supabase.createClient(MOMENTUM_URL,MOMENTUM_PUBLISHABLE_KEY,{
+    auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}
+  });
   document.getElementById('momentum-passport-button').addEventListener('click',openMomentumPassport);
   document.getElementById('momentum-passport-close').addEventListener('click',()=>document.getElementById('momentum-passport-panel').hidden=true);
-
   const form=document.getElementById('momentum-auth-form');
   const email=document.getElementById('momentum-email');
-  const password=document.getElementById('momentum-password');
   const authBox=document.getElementById('momentum-auth');
-  async function enter(user){
-    momentumUser=user;
-    momentumAuthMessage('טוען את הפרופיל האישי...');
-    // Never download old app_state or chat content from Supabase.
+  async function enter(id){
+    momentumUser={id};
     const old=load();
     if(old && old.profile && Array.isArray(old.messages)){
       S=old;
       try{paintStatic();if(S.started){enterChat();if(!S.messages.length)openConversation();}}catch(e){console.error(e);}
-    } else {
-      // Fresh state for each account, without data from a previous signed-in user.
+    }else{
       S={lang:'he',mode:'type',started:false,phase:'opening',messages:[],profile:{strengths:[],costs:[],open:[],directions:[]},practice:false,practiceStep:0,ack:false,shift:false};
       try{paintStatic();}catch(e){console.error(e);}
     }
@@ -1903,26 +1895,28 @@ async function openMomentumPassport(){
     scheduleLivingPassport();
   }
   form.addEventListener('submit',async ev=>{
-    ev.preventDefault();momentumAuthMessage('מתחבר...');
-    const {data,error}=await momentumClient.auth.signInWithPassword({email:email.value.trim(),password:password.value});
-    if(error)momentumAuthMessage(error.message);else await enter(data.user);
+    ev.preventDefault();
+    const id=email.value.trim().toLowerCase();
+    momentumAuthMessage('יוצר או טוען Passport...');
+    const button=document.getElementById('momentum-login');
+    button.disabled=true;
+    try{
+      const {data,error}=await momentumClient.rpc('demo_enter_passport',{p_email:id});
+      if(error)throw error;
+      if(!data || data.email!==id)throw new Error('לא התקבל אישור מהשרת');
+      localStorage.setItem('momentum_demo_active_email',id);
+      await enter(id);
+    }catch(e){momentumAuthMessage('לא ניתן להיכנס: '+(e.message||e));}
+    finally{button.disabled=false;}
   });
-  document.getElementById('momentum-register').addEventListener('click',async()=>{
-    if(!form.reportValidity())return;
-    momentumAuthMessage('יוצר חשבון...');
-    const {data,error}=await momentumClient.auth.signUp({email:email.value.trim(),password:password.value,options:{emailRedirectTo:location.origin+location.pathname}});
-    if(error)momentumAuthMessage(error.message);
-    else if(data.session && data.user)await enter(data.user);
-    else momentumAuthMessage('נשלח אימייל לאימות החשבון. לחצו על הקישור ואז חזרו להתחבר.');
+  document.getElementById('momentum-logout').addEventListener('click',()=>{
+    save();localStorage.removeItem('momentum_demo_active_email');location.reload();
   });
-  document.getElementById('momentum-logout').addEventListener('click',async()=>{
-    save();
-    await momentumClient.auth.signOut();
-    momentumUser=null;location.reload();
-  });
-  const {data,error}=await momentumClient.auth.getUser();
-  if(!error && data.user)await enter(data.user);
-  else momentumAuthMessage('התחברו או הירשמו כדי להתחיל.');
+  const previous=localStorage.getItem('momentum_demo_active_email');
+  if(previous){
+    email.value=previous;
+    momentumAuthMessage('להמשך, לחץ ״בוא נתחיל״. אפשר גם להזין אימייל אחר.');
+  }else momentumAuthMessage('הזן אימייל כדי ליצור Passport חדש או להמשיך לקיים. אין סיסמה או קוד.');
 })();
 </script>
 
