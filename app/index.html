@@ -1397,6 +1397,9 @@ async function sendUser(text){
 }
 
 function applyReply(out){
+  // Feed the model's explicitly stated civilian insights into the Passport sync queue.
+  // This function filters sensitive terms and skips practice mode.
+  acceptPassportUpdate(out && out.passport_update);
   DIAG.triggers = [];
   if (out.ack) DIAG.triggers.push("service acknowledgment (once)");
   if (out.shift) DIAG.triggers.push("named the shift to self-direction (once)");
