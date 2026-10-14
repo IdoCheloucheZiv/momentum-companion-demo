@@ -394,7 +394,7 @@ en:{
   wLede:"Thank you for your service. Whether you have a clear plan or are still exploring, this is a place to pause, ask questions, and find a next step that fits you.",
   w1t:"What this does", w1p:"Asks about your service, what it actually required of you, and what it built. Then helps you think through what is next — with real options, real trade-offs, and follow-through.",
   w2t:"Support along the way", w2p:"This should feel less like a counselor or teacher and more like an older brother in your corner: practical, respectful, honest, and on your side. You can talk about decisions or how you are feeling. Human support is always one tap away; this companion is not a therapist.",
-  w3t:"Your words", w3p:"The conversation is saved in this browser only. Each message you send is passed to an AI service to write a reply. If you speak, your browser handles the speech — on most browsers that means audio goes to the browser maker's servers. Nothing is stored on our server. Clear your browser data and this is gone. On a shared device, other people using this browser could open it.",
+  w3t:"Your words", w3p:"The conversation is saved in this browser only. Each message you send is passed to an AI service to write a reply. If you speak, your browser handles the speech — on most browsers that means audio goes to the browser maker's servers. Civilian profile facts, goals, reminders and onboarding progress are saved in the demo database. The onboarding service-description answer stays in this device and is excluded from AI requests. Clearing browser data removes the local conversation, not the saved civilian Passport. Use fictional information only. On a shared device, other people using this browser could open it.",
   wModeQ:"How do you want to talk?",
   m1:"Type", m1s:"Keyboard only", m2:"Speak", m2s:"Voice in, read aloud", m3:"Both", m3s:"Switch freely",
   start:"Start talking", tiny:"You can stop, change language, or switch to voice at any point.",
@@ -444,7 +444,7 @@ he:{
   wLede:"תודה על השירות שלך. בין שיש לך תוכנית ברורה ובין שאתה עדיין בודק כיוונים, זה מקום לעצור רגע, לשאול שאלות ולמצוא צעד הבא שמתאים לך.",
   w1t:"מה זה עושה", w1p:"שואל על השירות שלך, מה הוא באמת דרש ממך, ומה הוא בנה. ואז עוזר לחשוב מה הלאה — עם אפשרויות אמיתיות, יתרונות וחסרונות, ומעקב.",
   w2t:"תמיכה לאורך הדרך", w2p:"זה אמור להרגיש פחות כמו יועץ או מורה ויותר כמו אח גדול שנמצא בצד שלך: מעשי, מכבד, ישר ואיתך. אפשר לדבר על החלטות וגם על איך שאתה מרגיש. תמיכה אנושית תמיד זמינה בלחיצה; העוזר אינו מטפל.",
-  w3t:"המילים שלך", w3p:"השיחה נשמרת רק בדפדפן הזה. כל הודעה שאתה שולח עוברת לשירות AI כדי לכתוב תשובה. אם תדבר, הדפדפן מטפל בזיהוי הדיבור — ברוב הדפדפנים זה אומר שההקלטה עוברת לשרתים של יצרן הדפדפן. אצלנו בשרת לא נשמר כלום. ניקוי נתוני הדפדפן מוחק הכול. במכשיר משותף, מי שישתמש בדפדפן יוכל לפתוח את זה.",
+  w3t:"המילים שלך", w3p:"השיחה נשמרת רק בדפדפן הזה. כל הודעה שאתה שולח עוברת לשירות AI כדי לכתוב תשובה. אם תדבר, הדפדפן מטפל בזיהוי הדיבור — ברוב הדפדפנים זה אומר שההקלטה עוברת לשרתים של יצרן הדפדפן. מידע אזרחי לפרופיל, מטרות, תזכורות והתקדמות ההיכרות נשמרים בדאטאבייס של הדמו. התשובה לשאלת תיאור השירות באונבורדינג נשארת במכשיר ואינה נשלחת ל-AI. ניקוי הדפדפן מוחק את השיחה המקומית, ולא את הפרופיל האזרחי שנשמר. יש להשתמש במידע פיקטיבי בלבד. במכשיר משותף, מי שישתמש בדפדפן יוכל לפתוח את זה.",
   wModeQ:"איך נוח לך לדבר?",
   m1:"הקלדה", m1s:"מקלדת בלבד", m2:"דיבור", m2s:"מדברים ומקשיבים", m3:"שניהם", m3s:"מעבר חופשי",
   start:"מתחילים לדבר", tiny:"אפשר לעצור, להחליף שפה או לעבור לדיבור בכל רגע.",
@@ -1073,7 +1073,7 @@ function systemPrompt(ref){
   return `You are a practical transition companion for Israelis finishing IDF service (conscripts, officers, reservists). Reply in ${S.lang==="he"?"Hebrew":"English"}. Your relational stance is an older-brother / experienced-peer presence: adult-to-adult, warm, grounded, practical, loyal, and genuinely caring. Never sound like a parent, teacher, commander, counselor, therapist, bureaucrat, or authority figure. Do not lecture, preach, scold, patronize, or interrogate. Listen first; help the soldier think; give practical help and candid judgment when useful; respect that the soldier makes the decisions. You may be informal and lightly humorous when it fits. Do not claim that you personally served or personally went through military service. When experience is useful, say things like "many soldiers..." or "one thing others have found useful..." rather than inventing your own history.
 
 SELECTED TOPIC: ${S.activeTopic || "general conversation"}
-When a topic is selected, answer that topic directly. Do not repeat the welcome, thank-you paragraph, emotional transition preamble, or restart general intake. Use facts already shared; ask only for missing relevant details. For skills, list confirmed skills with evidence, elicit service type, actual role and rank if missing, then suggest potential skills from service experience and test them with examples. Never treat unit or rank as proof. Lists are appropriate for skills and practical output. Act as a practical assistant, not a therapist.
+When a topic is selected, answer that topic directly. Do not repeat the welcome, thank-you paragraph, emotional transition preamble, or restart general intake. Use facts already shared; ask only for missing relevant details. For skills, list confirmed skills with evidence, ask for general civilian responsibilities and concrete examples if missing, then suggest potential skills from service experience and test them with examples. Never treat unit or rank as proof. Lists are appropriate for skills and practical output. Act as a practical assistant, not a therapist.
 
 HOW YOU TALK
 - Sound like someone in their corner, not someone above them. Use the feel of an older brother who cares enough to listen, be straight with them, and help without taking over. Offer choices and recommendations as help, not orders.
@@ -1090,7 +1090,7 @@ Every reply must engage the specific content of their last message — but by ad
 When they express uncertainty, restlessness, wanting freedom, numbness, or not knowing what to do, treat that as the subject, not as an obstacle to getting through your questions. Explain plainly what is common for people leaving service — the sudden absence of structure, the gap between relief and emptiness, friends scattering, money pressure, family not understanding — say why it happens, and connect it to what THEY specifically said. Keep it a short, grounded explanation, not a lecture, then one question that follows from it.
 
 PHASES (move when the person is ready, not on a timer)
-1 opening — establish, early and explicitly: where they served, their ACTUAL ROLE and rank (combat, commander, officer, support, technical), how long, and where they are now. Then how it is actually sitting with them and what is on their mind. Get role early — you need it as a hypothesis — but never treat it as the conclusion about what they built.
+1 opening — use the completed onboarding and current civilian Passport. Ask only for missing civilian facts relevant to the user's current goal. Do not restart onboarding or request unit, rank, location or operational information. Use general responsibilities and examples to explore possible transferable skills, without treating job titles as proof.
 2 foundation — the transition foundation conversation: what their service actually required of them; what it took from them; what it required them to become; how it changed what they can do, what they trust themselves with, what responsibility means to them, and how they see the world. Hold both sides: service is sacrifice AND it built things. Do not resolve that tension prematurely.
 3 discovery — surface possible strengths from what they described, then TEST each one by asking for a concrete example. A strength enters the profile only with the person's own evidence.
 4 direction — what they are weighing next: work, study, money, relationships, rest, meaning.
@@ -1128,7 +1128,7 @@ ${state}`;
    ========================================================================== */
 async function askModel(){
   const hist = S.messages
-    .filter(m => m.role === "user" || m.role === "assistant")
+    .filter(m => !m.localOnly && (m.role === "user" || m.role === "assistant"))
     .slice(-CONFIG.HISTORY_TURNS)
     .map(m => ({ role: m.role, content: m.text }));
 
@@ -1839,6 +1839,7 @@ async function openMomentumPassport(){
     document.getElementById('momentum-logout').style.display='block';
     document.getElementById('momentum-passport-button').style.display='block';
     scheduleLivingPassport();
+    if(window.momentumOnboarding)await window.momentumOnboarding.start();
   }
   form.addEventListener('submit',async ev=>{
     ev.preventDefault();
