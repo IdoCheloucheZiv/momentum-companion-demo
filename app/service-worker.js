@@ -17,11 +17,12 @@
    in CACHE (tc-v1 → tc-v2) so phones pick up the new list.
    ============================================================ */
 
-const CACHE = "tc-v5-direct-topic-assistant";
+const CACHE = "tc-v7-full-passport";
 const APP_FILES = [
   "./",
   "./index.html",
-  "./indexH.html",
+  "./reminders.js",
+  "./passport.js",
   "./companion-mentor.jpeg",
   "./manifest.json",
   "./icon-192.png",
@@ -81,4 +82,14 @@ self.addEventListener("fetch", event => {
           .then(hit => hit || (req.mode === "navigate" ? caches.match("./index.html") : undefined))
       )
   );
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const url = new URL("./", self.registration.scope).href;
+  event.waitUntil(self.clients.matchAll({type:"window", includeUncontrolled:true}).then(async windows => {
+    const existing = windows.find(w => w.url.startsWith(self.registration.scope));
+    if (existing) return existing.focus();
+    return self.clients.openWindow(url);
+  }));
 });
