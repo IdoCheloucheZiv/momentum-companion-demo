@@ -1,3 +1,35 @@
+/* Shared civilian Passport editor and atomic app updates. Fictional demo only. */
+(() => {
+ const categories={education:'השכלה',training:'הכשרות והסמכות',experience:'ניסיון אזרחי',skill:'כישורים',language:'שפות',interest:'תחומי עניין',preference:'העדפות ואילוצים'};
+ const statuses={active:'פעיל',planned:'מתוכנן',in_progress:'בתהליך',completed:'הושלם',tentative:'בבדיקה',superseded:'הוחלף',archived:'בארכיון',cancelled:'בוטל',pending:'ממתין',delivered:'נמסר לדפדפן'};
+ const detailLabels={institution:'מוסד / גוף',field:'תחום',credential:'תואר / תעודה',start_date:'מועד התחלה',end_date:'מועד סיום',level:'רמת שליטה',evidence:'דוגמה תומכת',location:'מיקום רצוי',availability:'זמינות',budget:'תקציב',note:'הערה'};
+ const categoryFields={education:['institution','field','credential','start_date','end_date'],training:['institution','credential','end_date'],experience:['institution','start_date','end_date','evidence'],skill:['level','evidence'],language:['level'],interest:['note'],preference:['location','availability','budget','note']};
+ let current, editing=null, extracting=false;
+ const panel=document.getElementById('momentum-passport-panel');
+ panel.querySelector('.panel-inner').style.maxWidth='760px';
+ const inner=panel.querySelector('.panel-inner');inner.replaceChildren();
+ const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
+ const title=el('h2','ה-Passport שלי');const close=el('button','סגור');close.onclick=()=>panel.hidden=true;
+ const warning=el('p','דמו — מידע פיקטיבי אזרחי בלבד. מייל אינו אימות זהות. כל הפרטים מבוססים על דיווח המשתמש.');
+ const feedback=el('p');feedback.setAttribute('role','status');
+ const summary=el('div'),cards=el('div'),reminders=el('div'),form=el('form');form.hidden=true;
+ const add=el('button','הוספת פרט לפרופיל'),addGoal=el('button','הוספת מטרה'),addDirection=el('button','עדכון כיוון'),refresh=el('button','רענון');
+ inner.append(title,close,warning,feedback,summary,add,addGoal,addDirection,refresh,form,cards,reminders);
+ async function call(fn,args){const{data,error}=await momentumClient.rpc(fn,args);if(error)throw error;return data;}
+ async function get(){return call('demo_v1_get_passport',{p_email:momentumUser.id});}
+ async function patch(changes,revision,request=crypto.randomUUID()){
+   return call('demo_v1_update_passport',{p_email:momentumUser.id,p_revision:revision,p_request_id:request,p_source:'app',p_changes:changes});
+ }
+ function errorText(e){return String(e.message||e).includes('REVISION_CONFLICT')?'הפרופיל השתנה בינתיים. רענן ובדוק את השינוי לפני שמירה נוספת.':String(e.message||e);}
+ function line(text){return el('p',text);}
+ function card(record,kind){
+  const node=el('section');node.style.cssText='border:1px solid #ddd;padding:10px;border-radius:8px;margin:8px 0';
+  node.append(el('strong',record.title),line(statuses[record.status]||record.status));
+  if(kind==='item')Object.entries(record.details||{}).forEach(([k,v])=>{if(v&&detailLabels[k])node.append(line(detailLabels[k]+': '+v));});
+  else if(record.target_label||record.target_date)node.append(line('יעד: '+(record.target_label||record.target_date)));
+  const edit=el('button','עריכה');edit.onclick=()=>editForm(kind,record);node.append(edit);return node;
+ }
+ function paintPassport(){
   summary.replaceChildren(line('כיוון מאושר: '+(current.current_direction||'טרם הוגדר')),line('כיוון בבדיקה: '+(current.tentative_direction||'אין כרגע')));
   cards.replaceChildren();
   for(const[k,label]of Object.entries(categories)){
