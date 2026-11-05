@@ -854,6 +854,7 @@ function save(){
 function acceptPassportUpdate(){ /* Deprecated response extraction: no legacy writes. */ }
 function scheduleLivingPassport(){ /* Login alone must not write profile data. */ }
 async function extractCivilianPassportInBackground(){
+  if(window.momentumOnboarding?.isActive())return;
   if(window.momentumPassport) await window.momentumPassport.extract();
 }
 const L = () => T[S.lang];
@@ -1868,6 +1869,7 @@ async function openMomentumPassport(){
 </script>
 
 <script src="./passport.js"></script>
+<script src="./onboarding.js"></script>
 <script src="./reminders.js"></script>
 </body>
 </html>
