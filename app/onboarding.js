@@ -145,6 +145,14 @@
    const text=session.flow.options.map(option=>'• '+option.title+' — '+option.reason).join('\n');
    say(text+'\n\n'+question('options'));return;
   }
+  const needsOpening=step==='release_status'&&session.revision===0&&!S.messages.some(message=>message.kind==='onboarding_v2'&&message.intro);
+  if(needsOpening){
+   const opening=he()?
+    'היי, טוב שהגעת למומנטום!\n\nאני כאן כדי לעזור לך בצעדים הבאים — עבודה, לימודים, טיולים ועוד.\n\nנתחיל בהיכרות קצרה כדי לבנות את הפרופיל האישי שלך. נשמע על הניסיון שצברת בשירות, ההשכלה והניסיון הקודם שלך, ומה היית רוצה לעשות בהמשך.\n\nהמידע שתשתף יעזור לנו בהמשך לבנות איתך קורות חיים ולחבר אותך להזדמנויות, מלגות, תוכניות ושירותים לחיילים משוחררים שמתאימים לצרכים ולמטרות שלך.\n\nגם אם עדיין אין לך כיוון, זה בסדר. נוכל לחשוב על זה יחד.':
+    'Hi, welcome to Momentum!\n\nI am here to help with your next steps — work, studies, travel and more.\n\nWe will start with a short conversation to build your personal profile, covering your experience in service, education, previous experience and what you would like to do next.\n\nWhat you share will help us build your CV together and connect you with opportunities, scholarships, programs and services for discharged soldiers that fit your needs and goals.\n\nIt is okay if you do not have a direction yet. We can think it through together.';
+   pushMsg('assistant',opening+'\n\n'+question(step),{kind:'onboarding_v2',onboardingStep:step,intro:true});
+   return;
+  }
   say(question(step),step==='service');
  }
  function completion(){
