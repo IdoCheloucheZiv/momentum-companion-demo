@@ -17,12 +17,13 @@
    in CACHE (tc-v1 → tc-v2) so phones pick up the new list.
    ============================================================ */
 
-const CACHE = "tc-v7-full-passport";
+const CACHE = "tc-v8-adaptive-onboarding";
 const APP_FILES = [
   "./",
   "./index.html",
   "./reminders.js",
   "./passport.js",
+  "./onboarding.js",
   "./companion-mentor.jpeg",
   "./manifest.json",
   "./icon-192.png",
