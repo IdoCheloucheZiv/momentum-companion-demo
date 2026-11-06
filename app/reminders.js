@@ -53,10 +53,13 @@
   });
   async function checkDue() {
     const email = momentumUser.id;
+    const generation=window.momentumAccountGeneration?.(email);
+    if(window.momentumResetting)return;
     const { data, error } = await momentumClient.rpc('demo_due_reminders', { p_email: email });
+    if(window.momentumResetting||generation!==window.momentumAccountGeneration?.(email))return;
     if (error) throw error;
     for (const reminder of data || []) {
-      if (momentumUser?.id !== email) return;
+      if(momentumUser?.id!==email||window.momentumResetting||generation!==window.momentumAccountGeneration?.(email))return;
       const key = 'momentum-notified:' + email + ':' + reminder.id;
       // Local marker lets an acknowledgement retry without redisplaying.
       if (!localStorage.getItem(key)) {
