@@ -167,13 +167,14 @@
   sanitize:civilianFragments,
   patch,
   async extract({catchUp=false,preview=false}={}){
-   if(S.practice||!momentumUser)return;
+   if(S.practice||!momentumUser||window.momentumResetting||window.momentumAccountHasPendingReset?.(momentumUser.id))return;
    if(extracting){if(preview)throw Error('עדכון אחר עדיין מתבצע. נסה שוב.');extractionPending=true;return;}
    const lastIndex=S.messages.findLastIndex(m=>m.role==='user');if(lastIndex<0)return;
    const latest=S.messages[lastIndex],text=latest.localOnly?'':civilianFragments(latest.text);
    if(!text&&!catchUp){document.getElementById('momentum-sync-note').textContent='לא נמצא מידע אזרחי לשמירה בהודעה זו.';return;}
    if(/אל תשמור|לא לשמור|don't save|do not save/i.test(latest.text||''))return;
    const account=momentumUser.id;
+   const generation=window.momentumAccountGeneration?.(account);
    const key='momentum-extracted-v11:'+account+':'+Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode((catchUp?'catchup:':'latest:')+S.messages.filter(m=>m.role==='user').length+':'+text)))).map(x=>x.toString(16).padStart(2,'0')).join('');
    if(!preview&&localStorage.getItem(key))return {success:true,changes:[]};
    const context=S.messages.slice(0,lastIndex).filter(m=>!m.localOnly&&(m.role==='user'||m.role==='assistant')).slice(-8).map(m=>{
@@ -187,6 +188,7 @@
    try{
     let attempt=0;
     while(true){
+     if(window.momentumResetting||generation!==window.momentumAccountGeneration?.(account))return;
      const p=await get();
      const system=`Extract civilian Passport changes from ${catchUp?'the sanitized USER statements in the supplied conversation, respecting the latest correction':'the LATEST user statement; previous statements and assistant questions only clarify short replies'}. Return ONLY JSON {"changes":[]}. Assistant questions are NOT evidence about the user; never infer skills from assistant suggestions. No quotes, hypotheticals or other people's facts. Fictional non-sensitive data only. Categories: education,training,experience,skill,language,interest,preference. Operations: {kind:"item",id?:existingUUID,category,title,status,details:{institution?,field?,credential?,start_date?,end_date?,level?,evidence?,location?,availability?,budget?,note?}}, {kind:"goal",id?:existingUUID,title,status,target_date?:"YYYY-MM-DD"|null,target_label?:string|null}, {kind:"direction",title,status:"tentative"|"confirmed"}, {kind:"situation",fields:{age?:integer|null,employment_status?:"employed"|"job_seeking"|"self_employed"|"not_working"|"unknown"|null,work_scope?:"full_time"|"part_time"|"occasional"|"unknown"|null,current_study_status?:"not_studying"|"preparing"|"enrolled"|"studying"|"unknown"|null,transition_stage?:"before_release"|"released"|"unknown"|null,release_date?:"YYYY-MM-DD"|null,release_date_precision?:"day"|"month"|"year"|"estimated"|null,release_time_estimate?:string|null,available_from?:"YYYY-MM-DD"|null,availability_label?:string|null}}. For discharge, distinguish before_release from released. In response to the initial discharge-status question, “עדיין לא” or “not yet” means before_release; “עוד חודשיים” means before_release with release_time_estimate. After a timing follow-up, use the existing transition_stage to interpret a bare date or duration. Preserve approximate future and past timing in release_time_estimate without inventing an exact day. Extract other civilian facts explicitly stated in the same reply. Never guess the date, employment or education from discharge status. A short 'not yet' after a psychometric question means no exam yet; a goal/interest may record psychometric preparation only if the user actually plans it, not merely because the assistant suggested it. A short 'still open' after a university question indicates institution undecided, not lack of education. Items status active/planned/in_progress/completed/tentative/superseded/archived; goals active/in_progress/completed/superseded/cancelled. Use existing IDs for corrections and do not repeat unchanged facts. Considering is tentative; an explicit chosen study path is confirmed. 'I want to study psychology in a year' is an intended study direction and a goal; do not mark enrolled. Completed training is not proof of proficiency. If the user explicitly replaces a direction, mark clearly incompatible old goals superseded in the same batch. Do not infer qualification. For relative dates resolve from the current date; year-only goals use target_label, not an invented day. For relative time since discharge preserve the user's estimate in release_time_estimate instead of inventing an exact date. For month/year-only release_date use a representative first day with explicit month/year precision. Today is ${new Date().toLocaleDateString('en-CA')}; timezone ${Intl.DateTimeFormat().resolvedOptions().timeZone}. Hebrew labels for Hebrew users. Save current age only when personally stated. During onboarding, use the preceding questionnaire question to interpret the answer. Prior-work answers belong to civilian experience with note "לפני השירות". Never include military details, units, roles, names, health or identifiers. For onboarding goals, uncertainty alone is NOT a goal or direction: return empty changes for it. Explicit near-term intentions such as temporary work, saving for a trip, rest or exploring options can be active goals without a long-term career decision. Preserve tentative wording; never turn rest or travel into a permanent career direction. Use the preceding question only to interpret the stated time horizon, never to choose an activity for the user. Empty changes if unsupported. Maximum 20 changes.`;
      const existing={...p};delete existing.email;
@@ -195,7 +197,7 @@
      const data=await response.json(),raw=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
      const parsed=JSON.parse(raw.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));
      if(!Array.isArray(parsed.changes))throw Error('Invalid extraction response');
-     if(momentumUser?.id!==account)return;
+     if(momentumUser?.id!==account||window.momentumResetting||generation!==window.momentumAccountGeneration?.(account))return;
      if(preview)return {success:true,changes:parsed.changes,revision:p.revision};
      try{if(parsed.changes.length)await patch(parsed.changes,p.revision);}catch(e){
       if(String(e.message||e).includes('REVISION_CONFLICT')&&attempt++<1)continue;
