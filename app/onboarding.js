@@ -39,17 +39,21 @@
  const evidenceExploration=['reliance','initiative','helping','perseverance','experience_preferences','contribution'];
  const originalSend=sendUser;
  let session=null, passport=null, active=false, busy=false, step=null, pending=null, account=null;
+ let accountGeneration;
  let serviceDraft=[];
+ let serviceExperiences=[],serviceSkills=[];
  const bar=document.createElement('div');
  const pause=document.createElement('button');pause.type='button';
  const resume=document.createElement('button');resume.type='button';
+ const resetAccount=document.createElement('button');resetAccount.type='button';resetAccount.textContent='איפוס החשבון והתחלה מחדש';
+ resetAccount.onclick=()=>window.awaitMomentumReset();
  bar.append(pause);document.getElementById('composer').append(bar);
- document.querySelector('#momentum-passport-panel .panel-inner').prepend(resume);
+ document.querySelector('#momentum-passport-panel .panel-inner').prepend(resume,resetAccount);
  const he=()=>S.lang==='he';
- function controls(){bar.hidden=!active;pause.disabled=busy;pause.textContent=he()?'להמשיך אחר כך':'Continue later';resume.textContent=he()?'השלמת היכרות':'Resume onboarding';}
+ function controls(){bar.hidden=!active;pause.disabled=busy;pause.textContent=he()?'להמשיך אחר כך':'Continue later';resume.textContent=he()?'השלמת היכרות':'Resume onboarding';resetAccount.textContent=he()?'איפוס החשבון והתחלה מחדש':'Reset account and start again';resetAccount.disabled=busy||window.momentumResetting;}
  function say(text,localOnly=false){pushMsg('assistant',text,{kind:'onboarding_v2',onboardingStep:step,localOnly});}
  async function rpc(fn,args){const result=await momentumClient.rpc(fn,args);if(result.error)throw result.error;return result.data;}
- function ensureAccount(){if(momentumUser?.id!==account)throw Error('ACCOUNT_CHANGED');}
+ function ensureAccount(){if(momentumUser?.id!==account||window.momentumResetting||accountGeneration!==window.momentumAccountGeneration?.(account))throw Error('ACCOUNT_CHANGED');}
  const fact=(key)=>session.facts[key];
  const answered=(key)=>Boolean(fact(key));
  const value=(key)=>fact(key)?.value;
@@ -60,19 +64,95 @@
  }
  function summaryText(){
   const lines=serviceDraft.map(text=>'• '+text).join('\n');
-  return (he()?'כך הייתי מתאר את הניסיון שלך בשפה אזרחית:\n':'Here is a civilian description of your experience:\n')+lines+(he()?'\n\nזה משקף את מה שעשית? אפשר לאשר או לכתוב תיקון.':'\n\nDoes that reflect your experience? Confirm or provide a correction.');
+  const skills=serviceSkills.length?'\n\n'+(he()?'הניסיון האזרחי שעולה מהתיאור שלך: ':'Civilian experience reflected in your description: ')+serviceSkills.join(', '):'';
+  return (he()?'כך הייתי מתאר את הניסיון שלך בשפה אזרחית:\n':'Here is a civilian description of your experience:\n')+lines+skills+(he()?'\n\nזה משקף את מה שעשית? אפשר לאשר, לתקן או להוסיף פרט שחסר.':'\n\nDoes that reflect your experience? Confirm, correct it or add a missing detail.');
  }
- function localServiceDraft(text){
-  const rules=[[/מפקד|מ״כ|מ"כ|פיקד|ניהלתי|צוות|commander|managed|team/i,'ניהול צוות ואחריות לאנשים','Team management and responsibility for people'],
-   [/הדרכ|הכשר|לימד|trained|training|taught/i,'הדרכה והכשרה','Instruction and training'],
-   [/סיכונ|risks?/i,'ניהול סיכונים','Risk management'],[/חלוקת עבודה|חלוקת משימות|משמרות|delegat|work allocation|shifts/i,'חלוקת עבודה ותיאום משימות','Work allocation and task coordination'],
-   [/שגרה|routine/i,'ניהול שגרת פעילות','Managing daily operations'],[/עצמאי|לבד|independent/i,'אחריות עצמאית לניהול פעילות','Independent responsibility for operations'],
-   [/לחץ|עוינ|מאתגר|pressure|hostile|challeng/i,'עבודה בסביבה מאתגרת','Working in a challenging environment']];
-  const entries=rules.filter(([pattern])=>pattern.test(text)).map(rule=>rule[he()?1:2]);
-  const size=text.match(/(?:צוות|קבוצה|כיתה|team)[^\d\n]{0,12}(\d{1,3})|(?:של|of)\s*(\d{1,3})\s*(?:חיילים|אנשים|people|soldiers)/i);
-  if(size)entries.push(he()?'אחריות לצוות של כ־'+(size[1]||size[2])+' אנשים':'Responsibility for a team of approximately '+(size[1]||size[2])+' people');
-  if(/שבוע|week/i.test(text)&&/לבד|עצמאי|אחריות|independent|responsib/i.test(text))entries.push(he()?'אחריות עצמאית לפעילות במשך כשבוע':'Independent responsibility for approximately one week');
-  return entries;
+ function serviceNumbers(text){
+  const words={'אחד':1,'אחת':1,'שני':2,'שתי':2,'שניים':2,'שתיים':2,'שלושה':3,'שלוש':3,'ארבעה':4,'ארבע':4,'חמישה':5,'חמש':5,'שישה':6,'שש':6,'שבעה':7,'שבע':7,'שמונה':8,'תשעה':9,'תשע':9,'עשרה':10,'עשר':10};
+  return text.replace(/(^|[\s,])ו?(אחד|אחת|שני|שתי|שניים|שתיים|שלושה|שלוש|ארבעה|ארבע|חמישה|חמש|שישה|שש|שבעה|שבע|שמונה|תשעה|תשע|עשרה|עשר)(?=[\s,]|$)/g,(_,prefix,word)=>prefix+words[word]);
+ }
+ function serviceContext(text){
+  const evidence=text.split(/[,;.!\n]+|\s+(?:אבל|אך|אלא)\s+/).filter(clause=>!/(?:^|\s)(?:לא|בלי|ללא)\s|\b(?:not|never)\b/i.test(clause)).join('. ');
+  return {
+   challenging:/סביבה.{0,15}(?:עוינת|מאתגרת)|תנאים מאתגרים|hostile environment|challenging environment/i.test(evidence),
+   changing:/מציאות (?:ה)?משתנה|סביבה (?:ה)?משתנה|תנאים (?:ה)?משתנים|שינויים תכופים|המצב השתנה|שינויים במצב|changing conditions|changing environment|frequent changes/i.test(evidence),
+   overall:/אחריות (?:ה)?כוללת|אחריות (?:ה)?מלאה|אחראי.{0,10}(?:הכל|הכול|כל הצרכים)|לכל הצרכים|overall responsibility|full responsibility/i.test(evidence),
+   pressure:/תחת לחץ|בתנאי לחץ|under pressure/i.test(evidence)
+  };
+ }
+ function enrichServiceExperience(experience,context){
+  const labels={
+   challenging:he()?'ניהול פעילות בסביבה מאתגרת':'Managing activity in a challenging environment',
+   changing:he()?'התאמת הפעילות למציאות משתנה':'Adapting activity to changing conditions',
+   overall:he()?'אחריות כוללת לאנשים ולביצוע המשימות':'Overall responsibility for people and task delivery',
+   pressure:he()?'פעילות בתנאי לחץ':'Working under pressure'
+  };
+  experience.context={...experience.context};
+  for(const [key,present]of Object.entries(context))if(present&&!experience.context[key]){
+   experience.context[key]=true;
+   experience.summary+='. '+labels[key];
+   experience.skills.push(labels[key]);
+  }
+  return experience;
+ }
+ function servicePhase(text){
+  const normalized=serviceNumbers(text);
+  const clauses=normalized.split(/[,;.!\n]+|\s+(?:אבל|אך|אלא)\s+/).filter(clause=>!/(?:^|\s)(?:לא|בלי|ללא)\s|\b(?:not|never)\b/i.test(clause));
+  const evidence=clauses.join('. ');
+  // Role names alone deliberately do not count as activities or prove a skill.
+  const rules=[
+   {key:'management',pattern:/פיקדתי (?:על|עם)|ניהלתי|ניהלנו|אחראי(?:ת)? על (?:צוות|קבוצה|כיתה|מחלקה|\d)|managed|led a team/i,he:'ניהול צוותים',en:'Team management'},
+   {key:'training',pattern:/הדרכתי|הדרכנו|הכשרתי|הכשרנו|לימדתי|לימדנו|אימנתי|אימנו|להכשרה שלהם|להכשרתם|אחראי.{0,35}(?:הכשרה|הדרכה)|trained|taught|instructed/i,he:'הדרכה והכשרה',en:'Instruction and training'},
+   {key:'allocation',pattern:/חלוקת (?:עבודה|משימות)|חילקתי (?:עבודה|משימות)|סידרתי משמרות|work allocation|delegated tasks|scheduled shifts/i,he:'חלוקת עבודה ותיאום משימות',en:'Work allocation and task coordination'},
+   {key:'risk',pattern:/ניהול סיכונים|ניהלתי סיכונים|הערכת סיכונים|risk management|assessed risks/i,he:'ניהול סיכונים',en:'Risk management'},
+   {key:'routine',pattern:/ניהול שגרה|ניהול השגרה|ניהלתי.{0,15}שגרה|ניהול שגרת|managed daily|managed routine/i,he:'ניהול שגרת פעילות',en:'Managing daily operations'},
+   {key:'planning',pattern:/תכננתי|תכננו|תיאמתי|תיאמנו|ארגנתי|ארגנו|planned|coordinated|organized/i,he:'תכנון ותיאום משימות',en:'Planning and coordinating tasks'},
+   {key:'technical',pattern:/תיקנתי|תיקנו|פתרתי תקלות|טיפלתי בתקלות|repaired|troubleshot/i,he:'טיפול בתקלות ופתרון בעיות טכניות',en:'Troubleshooting technical problems'},
+   {key:'documentation',pattern:/כתבתי דוחות|תיעדתי|ריכזתי נתונים|wrote reports|documented|compiled data/i,he:'תיעוד וריכוז מידע',en:'Documentation and information management'},
+   {key:'field',pattern:/(?:ביצעתי|ביצענו|עשיתי|עשינו|הובלתי|הובלנו|ניהלתי|פיקדתי).{0,70}(?:משימות|מעצרים|פשיטות|הגנת|אבטח|סיור)|led field tasks|managed field operations/i,he:'הובלת משימות צוות בשטח',en:'Leading field team tasks'}
+  ];
+  const activities=rules.filter(rule=>rule.pattern.test(evidence));
+  if(!activities.length)return null;
+  const count=pattern=>{const match=normalized.match(pattern);return match?Number(match[1]):null;};
+  const trainees=count(/(\d{1,3})\s*(?:טירונים|חניכים|משתתפים)/);
+  const people=trainees||count(/(\d{1,3})\s*(?:חיילים|אנשים|people|soldiers|participants)/i)||count(/(?:צוות|קבוצה|כיתה|team)[^\d\n]{0,12}(\d{1,3})/i);
+  const leaders=count(/(\d{1,3})\s*(?:מפקדים|מפקדות|מובילי צוות|team leaders|supervisors)/i);
+  const duration=normalized.match(/(\d{1,3})\s*(חודשים|חודש|שבועות|שבוע|ימים|months?|weeks?|days?)/i);
+  const keys=activities.map(activity=>activity.key);
+  const training=keys.includes('training');
+  const group=training?(he()?'משתתפים בהכשרה':'trainees'):(he()?'אנשים':'people');
+  let summary=he()?(training?'ניהול והכשרה':'ניהול והובלת פעילות'):(training?'Management and training':'Team and task management');
+  if(!keys.includes('management'))summary=activities[0][he()?'he':'en'];
+  if(people)summary+=(he()?' של כ־':' of approximately ')+people+' '+group;
+  if(leaders)summary+=(he()?' לצד אחריות ל־':' with responsibility for ')+leaders+(he()?' מובילי צוות':' team leaders');
+  if(duration)summary+=(he()?' במשך כ־':' for approximately ')+duration[1]+' '+duration[2];
+  const responsibilities=activities.map(activity=>activity[he()?'he':'en']);
+  if(responsibilities.length>1)summary+=(he()?'. תחומי האחריות כללו ':'. Responsibilities included ')+responsibilities.join(', ');
+  if(/לבד|עצמאי|independent/i.test(evidence))summary+=(he()?'. אחריות עצמאית לפעילות':'. Independent responsibility');
+  const skills=[...responsibilities];
+  if(leaders&&keys.includes('management'))skills.push(he()?'ניהול באמצעות מובילי צוות':'Managing through team leaders');
+  return enrichServiceExperience({summary,people_count:people,team_leaders_count:leaders,duration_label:duration?duration[1]+' '+duration[2]:null,responsibilities,skills},serviceContext(evidence));
+ }
+ function serviceAnalysis(texts){
+  const experiences=[];
+  for(const text of texts){
+   const phases=text.split(/\s+(?:ואז|לאחר מכן|אחר כך|בהמשך)\s+/);
+   for(const phase of phases){
+    const experience=servicePhase(phase);
+    if(experience)experiences.push(experience);
+    else if(experiences.length){
+     const targets=/שניהם|התפקידים|בשני התפקידים|both roles/i.test(phase)?experiences:[experiences[experiences.length-1]];
+     for(const previous of targets)enrichServiceExperience(previous,serviceContext(phase));
+    }
+   }
+  }
+  const skills=[...new Set(experiences.flatMap(experience=>experience.skills))];
+  return {experiences,skills,lines:experiences.map(experience=>experience.summary)};
+ }
+ function localServiceDraft(text){return serviceAnalysis([text]).lines;}
+ function serviceDetailQuestion(){
+  step='service';
+  say(he()?'מה כללו התפקידים שביצעת בפועל? על מה היית אחראי ואילו משימות ביצעת ביום־יום? אפשר לתאר באופן כללי.':'What did your roles involve in practice? What were you responsible for, and what tasks did you carry out day to day? A general description is enough.',true);
  }
  async function saveTurn(facts,changes,flow){
   if(!pending)pending={p_email:account,p_revision:session.revision,p_passport_revision:passport.revision,p_request_id:crypto.randomUUID(),p_facts:facts,p_changes:changes,p_flow:flow};
@@ -215,22 +295,35 @@ clarification may be one focused question only if the current answer is genuinel
   for(const change of result.changes)if(!['situation','item','goal','direction'].includes(change.kind))throw Error('INVALID_CHANGE');
  }
  async function serviceAnswer(text){
-  if(step==='service_confirm'){
-   if(/^(כן|נכון|מאשר|מאשרת|מדויק|yes|correct|confirm)[.!]?$/i.test(text.trim())){
-    const changes=[{kind:'item',category:'experience',title:he()?'ניסיון ניהולי ומקצועי — תרגום אזרחי מאושר':'Confirmed civilian experience summary',status:'active',details:{evidence:serviceDraft.join('; '),note:'תרגום אזרחי שנבדק ואושר על ידי המשתמש'}},
-     ...serviceDraft.filter(title=>!/\d/.test(title)).map(title=>({kind:'item',category:'skill',title,status:'active',details:{evidence:'אושר על ידי המשתמש במסגרת בדיקת תיאור הניסיון האזרחי'}}))];
-    await saveTurn({service_summary:{status:'known',value:{lines:serviceDraft,approved:true},evidence:'User approved civilian summary'}},changes,session.flow);
-    serviceDraft=[];await showNext();return;
-   }
+  const replies=S.messages.filter(message=>message.role==='user'&&message.localOnly&&['service','service_confirm','service_context'].includes(message.onboardingStep)).map(message=>message.text);
+  const analysis=serviceAnalysis(replies);
+  if(!analysis.experiences.length){serviceDraft=[];serviceExperiences=[];serviceSkills=[];serviceDetailQuestion();return;}
+  serviceDraft=analysis.lines;serviceExperiences=analysis.experiences;serviceSkills=analysis.skills;
+  const hasContext=analysis.experiences.some(experience=>Object.values(experience.context||{}).some(Boolean));
+  const contextAnswered=S.messages.some(message=>message.role==='user'&&message.localOnly&&message.onboardingStep==='service_context');
+  if(!hasContext&&!contextAnswered){
+   step='service_context';
+   say(he()?'מה כללה האחריות שלך מעבר למשימות עצמן, ובאילו תנאים פעלת? למשל אחריות כוללת לאנשים ולפעילות, סביבה מאתגרת או מציאות משתנה — רק מה שמתאר את הניסיון שלך. אפשר גם לומר שאין משהו נוסף.':'What responsibility did you have beyond individual tasks, and what were the conditions like? For example overall responsibility for people and activity, a challenging environment or changing conditions — only if these describe your experience. You can also say there is nothing to add.',true);
+   return;
   }
-  const entries=localServiceDraft(text);
-  if(!entries.length){say(he()?'כדי לבנות תיאור אזרחי, אפשר לפרט באופן כללי על הדרכה, אחריות לצוות, תיאום משימות או ניהול שגרה שהיו חלק מהתפקיד שלך.':'Please describe general responsibilities such as instruction, team responsibility, coordination or daily operations.',true);return;}
-  serviceDraft=[...new Set([...serviceDraft,...entries])];step='service_confirm';say(summaryText(),true);
+  if(step==='service_confirm'&&/^(כן|נכון|מאשר|מאשרת|מדויק|yes|correct|confirm)[.!]?$/i.test(text.trim())){
+   // Split long descriptions into supported 300-character evidence fields; keep complete neutral data in facts.
+   const changes=[];
+   serviceExperiences.forEach((experience,index)=>{
+    const chunks=experience.summary.match(/[\s\S]{1,300}/g)||[];
+    chunks.forEach((evidence,part)=>changes.push({kind:'item',category:'experience',title:(he()?'ניסיון מתורגם ':'Civilian experience ')+(index+1)+(part?' — '+(part+1):''),status:'active',details:{evidence,note:he()?'תיאור אזרחי שנבדק ואושר על ידי המשתמש':'Civilian description reviewed and approved by the user'}}));
+   });
+   for(const title of serviceSkills)changes.push({kind:'item',category:'skill',title,status:'active',details:{evidence:he()?'מבוסס על תיאור האחריות והעשייה שאושר על ידי המשתמש':'Based on responsibilities and activities reviewed by the user'}});
+   if(changes.length>20){say(he()?'התיאור כולל פרטים רבים. נוכל לקצר את הניסוח האזרחי לפני השמירה.':'The description is extensive. Please shorten the civilian summary before saving.',true);return;}
+   await saveTurn({service_summary:{status:'known',value:{lines:serviceDraft,experiences:serviceExperiences,skills:serviceSkills,approved:true},evidence:'User approved civilian summary'}},changes,session.flow);
+   serviceDraft=[];serviceExperiences=[];serviceSkills=[];await showNext();return;
+  }
+  step='service_confirm';say(summaryText(),true);
  }
  async function answer(text){
   if(busy||!active)return;
   busy=true;controls();
-  const localOnly=step==='service'||step==='service_confirm';
+  const localOnly=['service','service_confirm','service_context'].includes(step);
   try{
    ensureAccount();document.getElementById('input').value='';stopSpeaking();
    if(pending){await saveTurn();await showNext();return;}
@@ -260,11 +353,11 @@ clarification may be one focused question only if the current answer is genuinel
  }
  pause.onclick=()=>{if(busy)return;active=false;controls();say(he()?'נעצור כאן. אפשר לחזור להשלמת ההיכרות דרך הפרופיל.':'Paused. Resume onboarding through your profile.');};
  resume.onclick=()=>window.momentumOnboarding.start();
- sendUser=async function(text){if(!active)return originalSend(text);text=String(text||'').trim();if(text)return answer(text);};
+ sendUser=async function(text){if(window.momentumResetting)return;if(window.momentumAccountHasPendingReset?.(momentumUser?.id)){alert('יש איפוס שטרם אושר. יש לנסות שוב דרך כפתור איפוס החשבון בפרופיל.');return;}if(!active)return originalSend(text);text=String(text||'').trim();if(text)return answer(text);};
  window.momentumOnboarding={
   async start(){
    if(!momentumUser||busy)return;
-   busy=true;if(account!==momentumUser.id){pending=null;serviceDraft=[];}account=momentumUser.id;controls();
+   busy=true;if(account!==momentumUser.id){pending=null;serviceDraft=[];}account=momentumUser.id;accountGeneration=window.momentumAccountGeneration?.(account);controls();
    try{
     const read=await rpc('demo_onboarding_v2_get',{p_email:account});ensureAccount();
     session=read.session;passport=read.passport;
@@ -274,9 +367,9 @@ clarification may be one focused question only if the current answer is genuinel
     if(active)await showNext();
    }catch(error){active=true;say(he()?'לא ניתן לטעון את ההיכרות. בדוק שהותקן עדכון מסד הנתונים ונסה שוב.':'Unable to load onboarding. Check the database migration and retry.');}
    finally{busy=false;controls();}
-  },isActive:()=>active,
+  },isActive:()=>active,isBusy:()=>busy,
   // Pure functions are exposed for integration checks without sending real user data.
-  validate,nextStep,questions,localServiceDraft
+  validate,nextStep,questions,localServiceDraft,serviceAnalysis
  };
  controls();
 })();
