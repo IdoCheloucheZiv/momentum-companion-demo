@@ -832,6 +832,14 @@ const MOMENTUM_PUBLISHABLE_KEY = "sb_publishable_4yXhYVXNikbEX__YOBDX_w_99VEXB3c
 let momentumClient = null;
 let momentumUser = null;
 let momentumSaveTimer = null;
+window.momentumResetting = false;
+window.momentumAccountGeneration = email => localStorage.getItem('momentum-account-generation:'+email)||'';
+window.momentumAccountHasPendingReset = email => Boolean(localStorage.getItem('momentum-pending-account-reset:'+email));
+window.addEventListener('storage',event=>{
+  if(!momentumUser)return;
+  if(event.key==='momentum-account-generation:'+momentumUser.id)window.momentumResetting=true;
+  if(event.key==='momentum-account-reset-finished:'+momentumUser.id)location.reload();
+});
 let S = load() || {
   lang: "he", mode: "type", started: false,
   phase: "opening",           // opening → foundation → discovery → direction → open
@@ -1294,6 +1302,10 @@ function openConversation(){
 }
 
 async function sendUser(text){
+  if(window.momentumResetting)return;
+  if(window.momentumAccountHasPendingReset(momentumUser?.id)){alert('יש איפוס שטרם אושר. יש לנסות שוב דרך כפתור איפוס החשבון בפרופיל.');return;}
+  const sendingAccount=momentumUser?.id;
+  const generation=window.momentumAccountGeneration(sendingAccount);
   text = (text||"").trim();
   if (!text) return;
   $("input").value = ""; $("input").style.height="auto";
@@ -1306,6 +1318,7 @@ async function sendUser(text){
     if (S.practice) throw new Error("practice");
     out = await askModel();
   } catch (err) {
+    if(momentumUser?.id!==sendingAccount||generation!==window.momentumAccountGeneration(sendingAccount)){hideThinking();return;}
     if (!CONFIG.ALLOW_PRACTICE_FALLBACK) { hideThinking(); pushMsg("system", L().sendFail); return; }
     if (!S.practice) { S.practice = true; pushMsg("system", L().offline); }
     out = practiceReply(text);
@@ -1317,6 +1330,7 @@ async function sendUser(text){
     DIAG.at = new Date().toLocaleTimeString();
   }
   hideThinking();
+  if(momentumUser?.id!==sendingAccount||generation!==window.momentumAccountGeneration(sendingAccount))return;
   applyReply(out);
   // Independent extraction is non-blocking and cannot alter the chat reply.
   void extractCivilianPassportInBackground();
@@ -1428,7 +1442,7 @@ function openProfile(){
     S = {lang:S.lang,mode:'type',started:false,phase:'opening',messages:[],profile:{strengths:[],costs:[],open:[],directions:[]},practice:false,practiceStep:0,ack:false,shift:false};
     save();
     if (momentumClient && momentumUser) {
-      awaitMomentumReset();
+      localStorage.removeItem(KEY+'_'+momentumUser.id);location.reload();
     }
   };
   b.appendChild(reset);
@@ -1808,10 +1822,42 @@ sizeTopicPanel(); paintTopicPanel();
 <script>
 function momentumAuthMessage(msg){const e=document.getElementById('momentum-auth-message');if(e)e.textContent=msg;}
 async function awaitMomentumReset(){
-  if (!momentumUser) return;
-  if (!confirm('למחוק את השיחה המקומית במכשיר הזה? נתוני ה-Passport שנשמרו במפורש בענן לא יימחקו.')) return;
-  localStorage.removeItem(KEY + "_" + momentumUser.id);
-  location.reload();
+  if(!momentumUser||window.momentumResetting)return;
+  if(window.momentumOnboarding?.isBusy()){
+    alert(S.lang==='he'?'יש תשובה בתהליך שמירה. המתן לסיום ונסה שוב.':'Please wait for the current onboarding step to finish, then retry.');return;
+  }
+  const email=momentumUser.id;
+  const pendingKey='momentum-pending-account-reset:'+email;
+  const message=S.lang==='he'?
+    'לאפס את החשבון '+email+' ולהתחיל מחדש? הפרופיל, תשובות ההיכרות, המטרות, ההיסטוריה, התזכורות והשיחה המקומית יימחקו. לא ניתן לבטל את הפעולה.':
+    'Reset '+email+' and start again? This deletes your profile, onboarding answers, goals, history, reminders and local conversation. This cannot be undone.';
+  if(!confirm(message))return;
+  stopSpeaking();window.momentumResetting=true;
+  localStorage.setItem('momentum-account-generation:'+email,crypto.randomUUID());
+  try{
+    let request=JSON.parse(localStorage.getItem(pendingKey)||'null');
+    if(!request){
+      const {data,error}=await momentumClient.rpc('demo_v1_get_passport',{p_email:email});
+      if(error)throw error;
+      request={p_email:email,p_revision:data.revision,p_request_id:crypto.randomUUID()};
+      localStorage.setItem(pendingKey,JSON.stringify(request));
+    }
+    const {data,error}=await momentumClient.rpc('demo_reset_account',request);
+    if(error)throw error;
+    if(!data?.success||data.email!==email)throw Error('RESET_NOT_CONFIRMED');
+    for(const key of Object.keys(localStorage)){
+      if(key===KEY+'_'+email||key.startsWith('momentum-extracted-v')&&key.includes(':'+email+':')||key.startsWith('momentum-notified:'+email+':'))localStorage.removeItem(key);
+    }
+    localStorage.removeItem(pendingKey);
+    localStorage.setItem('momentum-account-reset-finished:'+email,crypto.randomUUID());
+    location.reload();
+  }catch(error){
+    if(String(error.message||error).includes('REVISION_CONFLICT'))localStorage.removeItem(pendingKey);
+    alert((S.lang==='he'?'לא התקבל אישור לאיפוס החשבון. אפשר לנסות שוב דרך כפתור האיפוס. ':'Account reset was not confirmed. Retry with the reset button. ')+String(error.message||error));
+    localStorage.setItem('momentum-account-reset-finished:'+email,crypto.randomUUID());
+    window.momentumResetting=false;
+    if(window.momentumOnboarding)await window.momentumOnboarding.start();
+  }
 }
 async function openMomentumPassport(){
   if(window.momentumPassport)await window.momentumPassport.open();
@@ -1868,8 +1914,8 @@ async function openMomentumPassport(){
 })();
 </script>
 
-<script src="./passport.js"></script>
-<script src="./onboarding.js?v=20261105-welcome-2"></script>
-<script src="./reminders.js"></script>
+<script src="./passport.js?v=20261105-reset-1"></script>
+<script src="./onboarding.js?v=20261105-reset-1"></script>
+<script src="./reminders.js?v=20261105-reset-1"></script>
 </body>
 </html>
