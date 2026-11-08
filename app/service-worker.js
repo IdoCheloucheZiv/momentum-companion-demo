@@ -17,7 +17,7 @@
    in CACHE (tc-v1 → tc-v2) so phones pick up the new list.
    ============================================================ */
 
-const CACHE = "tc-v8-adaptive-onboarding";
+const CACHE = "tc-v9-career-details";
 const APP_FILES = [
   "./",
   "./index.html",
