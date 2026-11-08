@@ -10,9 +10,9 @@
   release_timing:['מתי בערך צפוי השחרור שלך?','Approximately when do you expect to be discharged?'],
   age:['בן/בת כמה את/ה?','How old are you?'],
   service:['בדמו הזה, ספר/י באופן פיקטיבי וכללי על התפקידים שלך בשירות ומה עשית בפועל. בלי יחידה, מיקום או פרטים מבצעיים.','For this demo, describe fictional general responsibilities in service. Omit units, locations and operational details.'],
-  current_activity:['מה את/ה עושה היום מבחינת עבודה ולימודים?','What are you currently doing in terms of work and studies?'],
-  education:['איזו השכלה או הכשרות יש לך, ובאילו עבודות או פעילויות התנדבות כבר התנסית?','What education, training, work or volunteering experience do you have?'],
-  experience:['באילו עבודות או פעילויות התנדבות כבר התנסית? אפשר גם לומר שאין ניסיון קודם.','What work or volunteering experience have you had? You can also say you have none.'],
+  current_activity:['האם את/ה עובד/ת או לומד/ת כרגע? אפשר לספר מה התפקיד ובאיזה מקום, או מה בדיוק את/ה לומד/ת ובאיזה מוסד.','Are you working or studying right now? Tell me your role and employer or your program and institution.'],
+  education:['איזו השכלה או הכשרות נוספות יש לך? אפשר לציין את המסלול, המוסד והתואר או התעודה.','What other education or training have you had? You can include the program, institution and qualification.'],
+  experience:['באילו תפקידים עבדת או התנדבת בעבר? ספר/י איפה ומה עשית בכל תפקיד. אפשר גם לומר שאין ניסיון קודם.','What jobs or volunteer roles have you had before? Tell me where you worked and what you did. You can also say you have none.'],
   direction:['האם את/ה כבר יודע/ת מה המטרות או הצעדים הבאים שלך, בטווח הקרוב או הרחוק?','Do you know your goals or next steps, in the near or longer term?'],
   near_term:['כשחושבים על חצי השנה הקרובה, איך היית רוצה שהיא תיראה? למשל עבודה, טיולים, מנוחה או בדיקת לימודים — ואפשר משהו אחר.','How would you like the next six months to look? Perhaps work, travel, rest or exploring studies, or something else.'],
   rest_clarify:['במהלך חצי השנה הזאת היית רוצה גם לטייל, לעבוד בהיקף כלשהו, או שכרגע להתמקד רק במנוחה?','During these six months, would you also like to travel or work, or focus only on rest?'],
@@ -35,6 +35,7 @@
   selected_option:['איזו אפשרות תרצה/י לבדוק לעומק? אפשר גם לומר שאף אחת עדיין לא מתאימה.','Which option would you like to investigate? It is fine if none fits yet.'],
   next_step:['מה תהיה/י מוכן/ה לעשות כדי להכיר את האפשרות הזאת? למשל לדבר עם מישהו בתחום או לבדוק קורס קצר.','What would you be willing to do to explore it: talk to someone in the field or look into a short course?']
  };
+ const careerTopics=['current_activity','education','experience'];
  const coreExploration=['interests','task_preferences','energy','positive_experiences','values','considered_options'];
  const evidenceExploration=['reliance','initiative','helping','perseverance','experience_preferences','contribution'];
  const originalSend=sendUser;
@@ -59,6 +60,7 @@
  const value=(key)=>fact(key)?.value;
  function civilian(value){return window.momentumPassport.sanitize(String(value||''));}
  function question(id){
+  if(session.flow.career_followup?.topic===id)return session.flow.career_followup.question;
   if(id==='release_timing'&&value('release_status')==='released')return he()?'מתי בערך השתחררת?':'Approximately when were you discharged?';
   return questions[id][he()?0:1];
  }
@@ -187,6 +189,7 @@
   }
  }
  function nextStep(){
+  if(careerTopics.includes(session.flow.career_followup?.topic))return session.flow.career_followup.topic;
   for(const key of ['release_status','release_timing','age'])if(!answered(key))return key;
   if(!answered('service_summary'))return 'service';
   if(value('release_status')==='released'&&!answered('current_activity'))return 'current_activity';
@@ -258,10 +261,12 @@ Read the latest reply IN CONTEXT of the current question. Extract ALL civilian f
 release_status value is before_release or released. 'עדיין לא' in response to discharge means before_release. release_timing value {label,precision:"estimated"|"day"|"month"|"year",date:null|string}; preserve relative dates as labels. If timing is unknown use unknown status. age is integer 16..100. current_activity value is a civilian object describing employment/studies. education and experience values are arrays, including volunteering; a combined answer must capture BOTH or clarify the missing part. Explicit no experience is none. direction value {certainty:"chosen"|"considering"|"open",description,plans:[{type,description,duration_label,start_label,sequence,certainty}]}. 'כן' alone is not a direction; ask what the goal is. 'לא יודע' about direction records unknown and certainty open. near_term value {rest:boolean,work:boolean,travel:boolean,description,rest_only:boolean}; flags require explicit statements. Travel value {destination:null|string,duration_label:null|string,certainty:"tentative"|"chosen"}. 'חודש איפשהו' supplies duration and explicitly unknown destination. exploration_consent value boolean; 'לא עכשיו' is false, 'כן' true when answering consent. Other exploration values can be arrays or short civilian descriptions. Unknown/none/deferred are valid answers and advance the topic.
 changes must mirror all supported facts to the EXISTING Passport using these operations:
 {kind:"situation",fields:{age,transition_stage,release_date,release_date_precision,release_time_estimate,employment_status,work_scope,current_study_status,availability_label}},
-{kind:"item",id?:existing UUID,category:"education"|"training"|"experience"|"skill"|"interest"|"preference"|"language",title,status:"active"|"tentative"|"completed"|"in_progress"|"planned"|"superseded"|"archived",details:{institution?,field?,credential?,evidence?,note?,location?,availability?,budget?}},
+{kind:"item",id?:existing UUID,category:"education"|"training"|"experience"|"skill"|"interest"|"preference"|"language",title,status:"active"|"tentative"|"completed"|"in_progress"|"planned"|"superseded"|"archived",details:{institution?,field?,credential?,evidence?,note?,location?,availability?,budget?,start_date?,end_date?,role?,responsibilities?,work_scope?,experience_type?,program?,study_year?,expected_end_date?}},
 {kind:"goal",id?:existing UUID,title,status:"active"|"in_progress"|"completed"|"superseded"|"cancelled",target_label?,target_date?},
 {kind:"direction",title,status:"tentative"|"confirmed"}.
 Situation enum employment_status employed/job_seeking/self_employed/not_working/unknown; work_scope full_time/part_time/occasional/unknown; current_study_status not_studying/preparing/enrolled/studying/unknown. Include only changed fields. Do not set employment_status or any other unrelated field to unknown because it was not discussed. Use existing IDs for corrections. Preserve tentative plans as tentative items; do not store a guessed career direction for rest or travel. Long term uncertainty can be an active preference titled 'כיוון עתידי עדיין פתוח'. Store interests, task and energy preferences, values, constraints and civilian evidence as items. Never confirm a skill based on your own suggestion. Preserve durations, ordering and uncertainty in notes/target_label. Do not invent precise dates. During exploration, new facts belong in BOTH facts and compatible changes, where supported.
+${window.momentumPassport.careerDetailsGuide || ''}
+For current_activity, education and experience, save what is known now. A current job or ongoing study is not past experience. If key career details are missing for this topic, return one concise clarification that names only the missing details. Prioritize exact role and actual duties for work, and exact program and institution for studies. For example, after "I work at Momentum" ask what the role is and what they do. A bare yes requires clarification, not an invented item. Use the supplied question and Passport to avoid asking for details already supplied. If the user says they do not know or prefer to skip, accept that and proceed.
 clarification may be one focused question only if the current answer is genuinely ambiguous or missing a necessary detail. Do not demand a template. Unknown answers advance; do not pressure. After core exploration, evidence_question can request ONE missing example using reliance/initiative/helping/perseverance/experience_preferences/contribution if it would clarify fit, otherwise null. Do not repeat answered topics. For options-only requests return 2-3 tentative options with {title,reason}, each tied to stated interests or preferences; if there is insufficient evidence return an empty array. Suggestions are not saved as user interests, goals or chosen direction until endorsed. After a user response to options, record considered_options/selected_option only when explicitly stated. Always respond in the user's language.`;
  async function analyze(text,optionsOnly=false){
   const sanitized=civilian(text);
@@ -331,13 +336,19 @@ clarification may be one focused question only if the current answer is genuinel
    if(localOnly){await serviceAnswer(text);return;}
    const result=await analyze(text);ensureAccount();
    const flow={...session.flow};
+   const answeringCareerFollowup=flow.career_followup?.topic===step;
+   if(answeringCareerFollowup)delete flow.career_followup;
+   const clarification=typeof result.clarification==='string'?result.clarification.trim().slice(0,300):'';
+   if(careerTopics.includes(step)&&!answeringCareerFollowup&&clarification){
+    flow.career_followup={topic:step,question:clarification};
+   }
    if(step==='exploration_consent'&&result.facts.exploration_consent?.value===true)flow.exploration_started=true;
    if(step==='rest_clarify'&&result.facts.near_term)flow.rest_clarified=true;
    if(step==='options'&&!result.clarification)flow.options_reviewed=true;
    if(!session.flow.evidence_asked&&evidenceExploration.includes(result.evidence_question)&&!answered(result.evidence_question))flow.evidence_question=result.evidence_question;
    if(evidenceExploration.includes(step)){flow.evidence_question=null;flow.evidence_asked=true;}
    await saveTurn(result.facts,result.changes,flow);
-   if(result.clarification&&nextStep()===step){say(result.clarification);return;}
+   if(!careerTopics.includes(step)&&result.clarification&&nextStep()===step){say(result.clarification);return;}
    await showNext();
   }catch(error){
    if(String(error.message||error).includes('REVISION_CONFLICT')){
