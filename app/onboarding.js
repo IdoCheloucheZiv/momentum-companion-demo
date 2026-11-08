@@ -232,9 +232,23 @@
  }
  function ensureOpening(){
   if(S.messages.some(message=>message.kind==='onboarding_v2'&&message.intro))return;
-   const opening=he()?
-    'היי, טוב שהגעת למומנטום!\n\nאני כאן כדי לעזור לך בצעדים הבאים — עבודה, לימודים, טיולים ועוד.\n\nנתחיל בהיכרות קצרה כדי לבנות את הפרופיל האישי שלך. נשמע על הניסיון שצברת בשירות, ההשכלה והניסיון הקודם שלך, ומה היית רוצה לעשות בהמשך.\n\nהמידע שתשתף יעזור לנו בהמשך לבנות איתך קורות חיים ולחבר אותך להזדמנויות, מלגות, תוכניות ושירותים לחיילים משוחררים שמתאימים לצרכים ולמטרות שלך.\n\nגם אם עדיין אין לך כיוון, זה בסדר. נוכל לחשוב על זה יחד.':
-    'Hi, welcome to Momentum!\n\nI am here to help with your next steps — work, studies, travel and more.\n\nWe will start with a short conversation to build your personal profile, covering your experience in service, education, previous experience and what you would like to do next.\n\nWhat you share will help us build your CV together and connect you with opportunities, scholarships, programs and services for discharged soldiers that fit your needs and goals.\n\nIt is okay if you do not have a direction yet. We can think it through together.';
+  const opening=he()?
+   [
+    "היי, טוב שהגעת למומנטום!",
+    "בשיחת ההיכרות נבנה את הפרופיל שלך. הנה מה שנשאל, שאלה אחת בכל פעם:",
+    "1. האם כבר השתחררת, מתי זה קרה או צפוי לקרות, ובן או בת כמה את/ה.\n2. איזה ניסיון צברת בשירות, בתיאור כללי ובלי יחידה, מיקום או פרטים מבצעיים.\n3. מה את/ה עושה היום, אם זה רלוונטי, מה למדת, ואיפה עבדת או התנדבת בעבר.\n4. מה היית רוצה לעשות בהמשך, והאם כבר יש לך כיוון.",
+    "אם כבר יש לך כיוון, נסיים אחרי החלק הזה. אם הכיוון עדיין פתוח, נשאל איך היית רוצה שחצי השנה הקרובה תיראה. אחר כך אפשר לבחור אם להמשיך לשיחה על תחומי עניין וכיוונים אפשריים או לסיים כאן.",
+    "בסוף אכתוב לך במפורש שההיכרות הסתיימה. אפשר גם לעצור בכל שלב ולחזור דרך הפרופיל.",
+    "מה שתבחר/י לשתף יעזור לנו לבנות איתך קורות חיים ולהציע הזדמנויות, מלגות, תוכניות ושירותים שמתאימים למטרות שלך."
+   ].join('\n\n'):
+   [
+    "Hi, welcome to Momentum!",
+    "We’ll use this onboarding conversation to build your profile. Here’s what we’ll ask, one question at a time:",
+    "1. Whether you’ve been discharged, roughly when that happened or is expected, and your age.\n2. What experience you gained in service, described in general terms without units, locations, or operational details.\n3. What you do now, if relevant, what you’ve studied, and where you’ve worked or volunteered.\n4. What you’d like to do next and whether you already have a direction.",
+    "If you already have a direction, we’ll wrap up after these topics. If your direction is still open, we’ll ask what you’d like the next six months to look like. Then you can choose whether to explore your interests and possible paths or finish onboarding there.",
+    "I’ll tell you explicitly when onboarding is complete. You can also pause anytime and resume from your profile.",
+    "What you choose to share helps us build your CV together and suggest opportunities, scholarships, programs, and services that fit your goals."
+   ].join('\n\n');
   const first=S.messages.findIndex(message=>message.role==='assistant'&&['onboarding_v2','onboarding'].includes(message.kind));
   if(first>=0){
    const message=S.messages[first];
